@@ -15,11 +15,12 @@ SRCS     := $(CORE) $(PLAT) $(GAME)
 ifeq ($(PLATFORM),host)
 # Native build: run and debug the same engine the retro targets will use.
 CC      := gcc
-CFLAGS  := -std=c99 -Wall -Wextra -Iinclude -D_POSIX_C_SOURCE=200809L
+CFLAGS  := -std=c99 -Wall -Wextra -Iinclude -DATMA_PLATFORM_HOST $(shell pkg-config --cflags sdl3)
+LIBS    := $(shell pkg-config --libs sdl3)
 TARGET  := $(BUILD)/atma
 $(TARGET): $(SRCS)
 	@mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) $^ -o $@
+	$(CC) $(CFLAGS) $^ $(LIBS) -o $@
 else ifeq ($(PLATFORM),zxn)
 # ZX Spectrum Next build via zcc (z88dk): SDCC backend, size-optimized,
 # emitting a .nex file. The sprite/Layer 2/vt_sound libs join when the gfx

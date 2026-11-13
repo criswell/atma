@@ -1,73 +1,94 @@
-#include <stdio.h>
-#include <time.h>
+#include <SDL3/SDL.h>
 #include "atma/platform.h"
 #include "atma/input.h"
-#include "atma/gfx.h"
-#include "atma/sound.h"
 #include "atma/engine.h"
+#include "host_internal.h"
 
 /*
- * Host backend (the desktop build).
+ * Host backend (the desktop build), on SDL3.
  *
- * Headless placeholder: no window and no audio yet - just deterministic
- * stubs so the engine loop can be built and exercised with gcc. Notably,
- * `make PLATFORM=host run` terminates on its own after 120 frames via the
- * auto-quit in the input backend below. TODO: a real window (e.g. SDL) and
- * keyboard mapping onto the ATMA_BTN_* bits.
+ * This file owns SDL lifetime, frame pacing and input. Graphics live in
+ * host_gfx.c and sound in host_sound.c. The logical machine is the ZX
+ * Spectrum Next (256x192, 64 sprites); the window scales it.
  */
 
 static const atma_platform_info info = { "host", 60, 256, 192 };
-static struct timespec next; /* absolute time of the next display refresh */
+static Uint64 next_ns;
+static Uint64 frame_ns;
+static u16 quit_requested;
 
 const atma_platform_info *atma_platform_info_get(void) { return &info; }
 
 void atma_platform_init(void)
 {
-    clock_gettime(CLOCK_MONOTONIC, &next);
+    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
+    frame_ns = SDL_NS_PER_SECOND / info.display_hz;
+    next_ns = SDL_GetTicksNS();
 }
 
-void atma_platform_shutdown(void) {}
+void atma_platform_shutdown(void)
+{
+    SDL_Quit();
+}
+
 void atma_platform_set_cpu_speed(atma_cpu_speed speed) { (void)speed; }
 
 u8 atma_platform_wait_frame(void)
 {
-    /* Sleep until the absolute next-refresh deadline (not "now + 16 ms"),
-     * so per-tick overhead doesn't accumulate into drift. */
-    next.tv_nsec += 1000000000L / info.display_hz;
-    if (next.tv_nsec >= 1000000000L) {
-        next.tv_nsec -= 1000000000L;
-        next.tv_sec++;
+    Uint64 now;
+    Uint64 late;
+
+    /* Absolute deadlines so per-tick overhead doesn't accumulate as drift. */
+    next_ns += frame_ns;
+    now = SDL_GetTicksNS();
+    if (now < next_ns) {
+        SDL_DelayPrecise(next_ns - now);
+        return 1;
     }
-    clock_nanosleep(CLOCK_MONOTONIC, TIMER_ABSTIME, &next, 0);
-    return 1;
+
+    late = (now - next_ns) / frame_ns;
+    if (late > 10) {
+        next_ns = now;
+        late = 10;
+    } else {
+        next_ns += late * frame_ns;
+    }
+    return (u8)(1 + late);
 }
 
-void atma_input_backend_init(void) {}
+void atma_input_backend_init(void)
+{
+    quit_requested = 0;
+}
+
 void atma_input_backend_shutdown(void) {}
 
 u16 atma_input_backend_read(void)
 {
-    /* Placeholder: pretend the user quits after ~2 seconds so the headless
-     * build terminates. TODO: real keyboard input. */
-    return atma_frame_count() >= 120 ? ATMA_BTN_QUIT : 0;
-}
+    SDL_Event e;
+    const bool *k;
+    u16 bits = 0;
 
-/* Host gfx: pure stubs until a window backend exists. */
-void atma_gfx_init(void) {}
-void atma_gfx_shutdown(void) {}
-void atma_gfx_begin_frame(void) {}
-void atma_gfx_end_frame(void) {}
-void atma_gfx_clear(u8 color) { (void)color; }
-void atma_gfx_sprite_set(u8 slot, i16 x, i16 y, u8 pattern, u8 flags)
-{
-    (void)slot; (void)x; (void)y; (void)pattern; (void)flags;
-}
-void atma_gfx_sprite_hide(u8 slot) { (void)slot; }
+    while (SDL_PollEvent(&e)) {
+        if (e.type == SDL_EVENT_QUIT) {
+            quit_requested = ATMA_BTN_QUIT;
+        } else if (e.type == SDL_EVENT_KEY_DOWN && !e.key.repeat) {
+            if (e.key.scancode == SDL_SCANCODE_F11 ||
+                (e.key.scancode == SDL_SCANCODE_RETURN && (e.key.mod & SDL_KMOD_ALT))) {
+                atma_host_toggle_fullscreen();
+            }
+        }
+    }
 
-/* Host sound: pure stubs until an audio backend exists. */
-void atma_sound_init(void) {}
-void atma_sound_shutdown(void) {}
-void atma_sound_update(void) {}
-void atma_sound_music_play(u8 track) { (void)track; }
-void atma_sound_music_stop(void) {}
-void atma_sound_sfx_play(u8 id) { (void)id; }
+    k = SDL_GetKeyboardState(NULL);
+    if (k[SDL_SCANCODE_UP]    || k[SDL_SCANCODE_W]) bits |= ATMA_BTN_UP;
+    if (k[SDL_SCANCODE_DOWN]  || k[SDL_SCANCODE_S]) bits |= ATMA_BTN_DOWN;
+    if (k[SDL_SCANCODE_LEFT]  || k[SDL_SCANCODE_A]) bits |= ATMA_BTN_LEFT;
+    if (k[SDL_SCANCODE_RIGHT] || k[SDL_SCANCODE_D]) bits |= ATMA_BTN_RIGHT;
+    if (k[SDL_SCANCODE_Z] || k[SDL_SCANCODE_J]) bits |= ATMA_BTN_FIRE1;
+    if (k[SDL_SCANCODE_X] || k[SDL_SCANCODE_K]) bits |= ATMA_BTN_FIRE2;
+    if (k[SDL_SCANCODE_RETURN] || k[SDL_SCANCODE_SPACE]) bits |= ATMA_BTN_START;
+    if (k[SDL_SCANCODE_ESCAPE]) bits |= ATMA_BTN_QUIT;
+
+    return (u16)(bits | quit_requested);
+}

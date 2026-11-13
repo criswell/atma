@@ -30,6 +30,14 @@ void atma_gfx_clear(u8 color);
  * pattern — which bitmap to show, in the backend's pattern/attribute table.
  * flags   — backend-defined attribute bits (mirror, rotate, layer, ...).
  */
+#define ATMA_SPR_MIRROR_X 0x08
+#define ATMA_SPR_MIRROR_Y 0x04
+#define ATMA_SPR_ROTATE   0x02 /* 90 degrees clockwise, applied before mirroring */
+
+/* Hardware limits every backend honours; the Next is the ceiling. */
+#define ATMA_MAX_SPRITES  64
+#define ATMA_MAX_PATTERNS 256
+
 void atma_gfx_sprite_set(u8 slot, i16 x, i16 y, u8 pattern, u8 flags);
 void atma_gfx_sprite_hide(u8 slot);
 
