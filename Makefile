@@ -5,11 +5,13 @@
 # src/platform/<name>/, so dropping a new .c file there is enough to add it
 # to the build. host builds natively with gcc; zxn needs the z88dk toolchain.
 
+# GAME_DIR picks the program to build (default game; try GAME_DIR=demo).
 PLATFORM ?= host
-BUILD    := build/$(PLATFORM)
+GAME_DIR ?= game
+BUILD    := build/$(PLATFORM)/$(notdir $(GAME_DIR))
 CORE     := $(wildcard src/core/*.c)
 PLAT     := $(wildcard src/platform/$(PLATFORM)/*.c)
-GAME     := $(wildcard game/*.c)
+GAME     := $(wildcard $(GAME_DIR)/*.c)
 SRCS     := $(CORE) $(PLAT) $(GAME)
 
 ifeq ($(PLATFORM),host)

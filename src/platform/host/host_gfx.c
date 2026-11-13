@@ -11,6 +11,11 @@
  * window, so resizing and fullscreen rescale automatically (nearest
  * neighbour, so pixels stay crisp). Sprites draw in slot order, higher slots
  * on top, like the Next.
+ *
+ * The frame is rasterized into a real 256x192 target texture and only that
+ * is scaled to the window, in whole-number steps. Sprites therefore snap to
+ * the logical pixel grid just like Next hardware, instead of gliding over
+ * sub-pixel window positions.
  */
 
 #define SCALE_START 3
@@ -23,6 +28,7 @@ typedef struct {
 
 static SDL_Window *window;
 static SDL_Renderer *renderer;
+static SDL_Texture *screen;
 static SDL_Texture *patterns[ATMA_MAX_PATTERNS];
 static u16 pattern_w[ATMA_MAX_PATTERNS];
 static u16 pattern_h[ATMA_MAX_PATTERNS];
@@ -54,8 +60,12 @@ void atma_gfx_init(void)
     if (!window) return;
     renderer = SDL_CreateRenderer(window, NULL);
     if (!renderer) return;
+    screen = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
+                               SDL_TEXTUREACCESS_TARGET, pi->screen_w, pi->screen_h);
+    if (!screen) return;
+    SDL_SetTextureScaleMode(screen, SDL_SCALEMODE_NEAREST);
     SDL_SetRenderLogicalPresentation(renderer, pi->screen_w, pi->screen_h,
-                                     SDL_LOGICAL_PRESENTATION_LETTERBOX);
+                                     SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
     SDL_SetRenderVSync(renderer, 1);
 }
 
@@ -66,6 +76,8 @@ void atma_gfx_shutdown(void)
         if (patterns[i]) SDL_DestroyTexture(patterns[i]);
         patterns[i] = NULL;
     }
+    if (screen) SDL_DestroyTexture(screen);
+    screen = NULL;
     if (renderer) SDL_DestroyRenderer(renderer);
     if (window) SDL_DestroyWindow(window);
     renderer = NULL;
@@ -78,12 +90,15 @@ void atma_host_toggle_fullscreen(void)
     SDL_SetWindowFullscreen(window, !(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN));
 }
 
-void atma_gfx_begin_frame(void) {}
+void atma_gfx_begin_frame(void)
+{
+    if (screen) SDL_SetRenderTarget(renderer, screen);
+}
 
 void atma_gfx_end_frame(void)
 {
     int i;
-    if (!renderer) return;
+    if (!renderer || !screen) return;
 
     for (i = 0; i < ATMA_MAX_SPRITES; ++i) {
         const sprite_state *s = &sprites[i];
@@ -103,6 +118,10 @@ void atma_gfx_end_frame(void)
         SDL_RenderTextureRotated(renderer, patterns[s->pattern], NULL, &dst,
                                  angle, NULL, flip);
     }
+    SDL_SetRenderTarget(renderer, NULL);
+    SDL_SetRenderDrawColor(renderer, 0, 0, 0, 255);
+    SDL_RenderClear(renderer);
+    SDL_RenderTexture(renderer, screen, NULL, NULL);
     SDL_RenderPresent(renderer);
 }
 
@@ -112,6 +131,14 @@ void atma_gfx_clear(u8 color)
     SDL_SetRenderDrawColor(renderer, palette[color].r, palette[color].g,
                            palette[color].b, 255);
     SDL_RenderClear(renderer);
+}
+
+void atma_gfx_hline(u8 y, u8 color)
+{
+    if (!renderer) return;
+    SDL_SetRenderDrawColor(renderer, palette[color].r, palette[color].g,
+                           palette[color].b, 255);
+    SDL_RenderLine(renderer, 0, y + 0.5f, atma_platform_info_get()->screen_w, y + 0.5f);
 }
 
 void atma_gfx_sprite_set(u8 slot, i16 x, i16 y, u8 pattern, u8 flags)
@@ -156,6 +183,26 @@ int atma_host_pattern_set_rgba(u8 pattern, u16 w, u16 h, const u8 *rgba)
     pattern_w[pattern] = w;
     pattern_h[pattern] = h;
     return 0;
+}
+
+int atma_host_image_load(const char *path, u8 pattern, u16 w, u16 h)
+{
+    SDL_Surface *loaded, *rgba, *scaled;
+    int ok = -1;
+
+    if (!renderer) return -1;
+    loaded = SDL_LoadPNG(path);
+    if (!loaded) loaded = SDL_LoadBMP(path);
+    if (!loaded) return -1;
+    rgba = SDL_ConvertSurface(loaded, SDL_PIXELFORMAT_RGBA32);
+    SDL_DestroySurface(loaded);
+    if (!rgba) return -1;
+    scaled = SDL_ScaleSurface(rgba, w, h, SDL_SCALEMODE_LINEAR);
+    SDL_DestroySurface(rgba);
+    if (!scaled) return -1;
+    ok = atma_host_pattern_set_rgba(pattern, w, h, scaled->pixels);
+    SDL_DestroySurface(scaled);
+    return ok;
 }
 
 int atma_host_spritesheet_load(const char *path, u16 frame_w, u16 frame_h,

@@ -22,6 +22,10 @@ void atma_gfx_end_frame(void);
 /* Fill the screen with a palette index. */
 void atma_gfx_clear(u8 color);
 
+/* Fill one full-width scanline y (0..screen_h-1) with a palette index. Cheap
+ * on every target; enough for gradients and raster bars. */
+void atma_gfx_hline(u8 y, u8 color);
+
 /*
  * Hardware-sprite seam.
  * slot    — backend sprite index (the Next has 64 hardware sprites).

@@ -30,4 +30,10 @@ int atma_host_pattern_set_rgba(u8 pattern, u16 w, u16 h, const u8 *rgba);
 int atma_host_spritesheet_load(const char *path, u16 frame_w, u16 frame_h,
                                u8 first_pattern);
 
+/*
+ * Load one image (PNG or BMP) as a single pattern, scaled to w x h. Use this
+ * for art authored larger than the screen allows. Returns 0 or -1.
+ */
+int atma_host_image_load(const char *path, u8 pattern, u16 w, u16 h);
+
 #endif
