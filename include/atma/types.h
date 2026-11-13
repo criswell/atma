@@ -1,6 +1,12 @@
 #ifndef ATMA_TYPES_H
 #define ATMA_TYPES_H
 
+/*
+ * Fixed-width type shorthands used across the whole engine. On 8- and
+ * 16-bit targets these matter: they keep struct layouts and register writes
+ * stable regardless of what int resolves to on a given compiler.
+ */
+
 #include <stdint.h>
 
 typedef uint8_t  u8;

@@ -1,5 +1,14 @@
 #include "atma/gfx.h"
 
+/*
+ * ZX Next graphics backend.
+ *
+ * Plan: Layer 2 (zxnext_layer2) carries the background/atma_gfx_clear, and
+ * the Next's hardware sprites (zxnext_sprite) back atma_gfx_sprite_set —
+ * 64 sprites, 256x192 fits both systems. begin/end_frame will batch the
+ * per-frame register pokes.
+ */
+
 /* TODO: zxnext_layer2 for background, zxnext_sprite for sprites */
 
 void atma_gfx_init(void) {}
