@@ -9,6 +9,12 @@
 
 #include "types.h"
 
+/* Logical screen: the ZX Next's 256x192, the ceiling for every backend.
+ * Compile-time constants so games can size loops and clamps without a
+ * runtime lookup; atma_platform_info reports the same values. */
+#define ATMA_SCREEN_W 256
+#define ATMA_SCREEN_H 192
+
 /* Core-side lifecycle, driven by the engine. */
 void atma_gfx_init(void);
 void atma_gfx_shutdown(void);

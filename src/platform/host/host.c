@@ -1,6 +1,7 @@
 #include <SDL3/SDL.h>
 #include "atma/platform.h"
 #include "atma/input.h"
+#include "atma/gfx.h"
 #include "atma/engine.h"
 #include "host_internal.h"
 
@@ -12,7 +13,7 @@
  * Spectrum Next (256x192, 64 sprites); the window scales it.
  */
 
-static const atma_platform_info info = { "host", 60, 256, 192 };
+static const atma_platform_info info = { "host", 60, ATMA_SCREEN_W, ATMA_SCREEN_H };
 static Uint64 next_ns;
 static Uint64 frame_ns;
 static u16 quit_requested;

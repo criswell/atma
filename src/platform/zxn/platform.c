@@ -2,6 +2,7 @@
 #include <intrinsic.h>
 #include <z80.h>
 #include "atma/platform.h"
+#include "atma/gfx.h"
 
 /*
  * ZX Spectrum Next backend — platform entry points.
@@ -12,7 +13,7 @@
  * NextReg 0x05 regardless of the machine's HDMI vs VGA timing.
  */
 
-static const atma_platform_info info = { "zxn", 60, 256, 192 };
+static const atma_platform_info info = { "zxn", 60, ATMA_SCREEN_W, ATMA_SCREEN_H };
 static volatile u8 frames_seen; /* owned by the frame ISR */
 static u8 frames_taken;         /* last count consumed by the engine */
 

@@ -11,8 +11,6 @@
 
 #define LOGO_W 52
 #define LOGO_H 24
-#define SCREEN_W 256
-#define SCREEN_H 192
 
 static i16 x = 40, y = 30;
 static i8 dx = 2, dy = 1;
@@ -22,8 +20,8 @@ static void on_init(void)
 #ifdef ATMA_PLATFORM_HOST
     u8 i;
     /* Gradient uses palette indices 0..191, one per scanline. */
-    for (i = 0; i < SCREEN_H; ++i) {
-        atma_host_palette_set(i, 0, (u8)(i / 6), (u8)(70 + i * 185 / SCREEN_H));
+    for (i = 0; i < ATMA_SCREEN_H; ++i) {
+        atma_host_palette_set(i, 0, (u8)(i / 6), (u8)(70 + i * 185 / ATMA_SCREEN_H));
     }
     atma_host_spritesheet_load("demo/atma.png", LOGO_W, LOGO_H, 0);
 #endif
@@ -36,15 +34,15 @@ static void on_update(void)
     x += dx;
     y += dy;
     if (x <= 0)                { x = 0;                dx = -dx; }
-    if (x >= SCREEN_W - LOGO_W) { x = SCREEN_W - LOGO_W; dx = -dx; }
+    if (x >= ATMA_SCREEN_W - LOGO_W) { x = ATMA_SCREEN_W - LOGO_W; dx = -dx; }
     if (y <= 0)                { y = 0;                dy = -dy; }
-    if (y >= SCREEN_H - LOGO_H) { y = SCREEN_H - LOGO_H; dy = -dy; }
+    if (y >= ATMA_SCREEN_H - LOGO_H) { y = ATMA_SCREEN_H - LOGO_H; dy = -dy; }
 }
 
 static void on_render(void)
 {
     u8 line;
-    for (line = 0; line < SCREEN_H; ++line) {
+    for (line = 0; line < ATMA_SCREEN_H; ++line) {
         atma_gfx_hline(line, line);
     }
     atma_gfx_sprite_set(0, x, y, 0, 0);
