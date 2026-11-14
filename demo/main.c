@@ -56,9 +56,9 @@ static void on_update(void)
 
     x += dx;
     y += dy;
-    if (x <= 0)                { x = 0;                dx = -dx; }
+    if (x <= 0)                      { x = 0;                      dx = -dx; }
     if (x >= ATMA_SCREEN_W - LOGO_W) { x = ATMA_SCREEN_W - LOGO_W; dx = -dx; }
-    if (y <= 0)                { y = 0;                dy = -dy; }
+    if (y <= 0)                      { y = 0;                      dy = -dy; }
     if (y >= ATMA_SCREEN_H - LOGO_H) { y = ATMA_SCREEN_H - LOGO_H; dy = -dy; }
 }
 
