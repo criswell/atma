@@ -53,10 +53,14 @@ retro computers, but which can also build on modern PCs.
 ## One palette, the Next's colors
 
 The engine is indexed-color everywhere: you set palette entries with
-`atma_gfx_palette_set()` (RGB333, the Next's 9-bit color space) and every
-color drawn is an index into that table. The host is not more capable than
-the Next here: it quantizes to the same 512-color space, so what you see in
-the window is what the Next will show.
+`atma_gfx_palette_set()` (RGB333, the Next's 9-bit color space, 512
+colors) and every color drawn is an index into that table. The host is not
+more capable than the Next here: it quantizes to the same 512-color space,
+so what you see in the window is what the Next will show.
+
+Palette entries are live state: change one and every pixel using that
+index, sprites included, recolors on the next frame, on every platform.
+Palette animation is portable.
 
 Index 0 is the transparent color for sprites on every backend.
 

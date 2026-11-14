@@ -48,10 +48,14 @@ void atma_gfx_hline(u8 y, u8 color);
  * The palette. Every color the engine draws is an index into one shared
  * table. Channels arrive as ordinary 8-bit values and are quantized by the
  * engine to the Next's 9-bit RGB333 space (top 3 bits of red, 3 of green,
- * 2 of blue), on every backend: the host is not more capable than the
+ * 3 of blue), on every backend: the host is not more capable than the
  * Next, so the window shows byte-for-byte what the hardware shows. Entry
  * 0 is the transparent color for sprites. Set the palette before drawing
  * anything that depends on it (call from the game's init callback).
+ *
+ * Entries are live state, not upload-time constants: changing one recolors
+ * every drawn pixel that references the index, sprites included, on the
+ * next frame, on every platform. Palette animation is therefore portable.
  */
 void atma_gfx_palette_set(u8 index, u8 r, u8 g, u8 b);
 

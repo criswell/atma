@@ -7,9 +7,10 @@ Outputs <output-base>.h and <output-base>.c containing:
 
   - the image's palette as {index, r, g, b} rows: entry 0 is the
     transparent color (source pixels with alpha < 128); every other color
-    is quantized to the ZX Spectrum Next's 9-bit RGB333 space and expanded
-    back to 8-bit components, so the numbers are exactly what both the
-    host window and the Next hardware show;
+    is quantized to the ZX Spectrum Next's 9-bit RGB333 space (3 bits red,
+    3 green, 3 blue; 512 colors) and expanded back to 8-bit components, so
+    the numbers are exactly what both the host window and the Next
+    hardware show;
 
   - the image sliced into 16x16 cell patterns (the Next's native sprite
     atom), each cell one byte per pixel holding a palette index from that
@@ -126,8 +127,9 @@ def read_png(path):
 
 
 def to_rgb333(r, g, b):
-    """Quantize to the Next's 3/3/2-bit-per-channel space, expanded back."""
-    return (r >> 5) * 255 // 7, (g >> 5) * 255 // 7, (b >> 6) * 255 // 3
+    """Quantize to the Next's 9-bit RGB333 space (3/3/3), expanded back to
+    8-bit components."""
+    return (r >> 5) * 255 // 7, (g >> 5) * 255 // 7, (b >> 5) * 255 // 7
 
 
 def main():

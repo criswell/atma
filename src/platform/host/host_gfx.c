@@ -25,7 +25,10 @@
  * are quantized to the Next's 9-bit RGB333 (see palette_quantize below), so
  * the window shows byte-for-byte what the hardware will. Pattern uploads
  * are indexed bytes resolved through the same table, exactly what the zxn
- * backend pokes into sprite pattern memory.
+ * backend pokes into sprite pattern memory, and they are RE-RESOLVED when
+ * the palette changes (palette_flush), so hot-swapping the palette
+ * underneath a sprite recolors it here exactly as the Next's hardware
+ * resolves indices at render time.
  */
 
 #define SCALE_START 3
@@ -45,15 +48,25 @@ static u16 pattern_h[ATMA_MAX_PATTERNS];
 static sprite_state sprites[ATMA_MAX_SPRITES];
 static SDL_Color palette[256];
 
-/* The Next's RGB333 color space: 3 bits of red, 3 of green, 2 of blue
- * (9-bit color, 512 distinct values, the same table its default palette
- * uses). Quantize every entry so host and Next show identical colors. */
+/* Raw indexed bytes of every uploaded pattern, kept so the palette can be
+ * re-resolved on change (hot-swap parity with the Next, where pattern
+ * memory holds indices and the hardware resolves them against the live
+ * palette every frame). 64 x 256 bytes = 16K: exactly the Next's sprite
+ * pattern memory. pattern_live marks slots with an SDL texture to update. */
+static u8 pattern_bytes[ATMA_MAX_PATTERNS_8BIT][ATMA_PATTERN_BYTES];
+static u8 pattern_live[ATMA_MAX_PATTERNS_8BIT];
+static u8 palette_dirty;
+
+/* The Next's RGB333 color space: 3 bits of red, 3 of green, 3 of blue
+ * (9-bit color, 512 distinct values). Quantize every entry so host and
+ * Next show identical colors. The Next's default palette is its RGB332
+ * subset (the engine starts there via palette_default). */
 static SDL_Color palette_quantize(u8 r, u8 g, u8 b)
 {
     SDL_Color c;
     c.r = (Uint8)(((r >> 5) * 255) / 7);
     c.g = (Uint8)(((g >> 5) * 255) / 7);
-    c.b = (Uint8)(((b >> 6) * 255) / 3);
+    c.b = (Uint8)(((b >> 5) * 255) / 7);
     c.a = 255;
     return c;
 }
@@ -61,12 +74,47 @@ static SDL_Color palette_quantize(u8 r, u8 g, u8 b)
 static void palette_default(void)
 {
     int i;
-    /* RGB332 expansion, which is also the Next's default 8-bit palette. */
+    /* RGB332 expansion, which is also the Next's default 8-bit palette:
+     * blue's 2 bits replicated by the quantizer's /7 rounding to fill the
+     * 9-bit entry. Entry = index, so power-on colors need no setup. */
     for (i = 0; i < 256; ++i) {
         palette[i] = palette_quantize((u8)(((i >> 5) & 7) * 255 / 7),
                                       (u8)(((i >> 2) & 7) * 255 / 7),
                                       (u8)((i & 3) * 255 / 3));
     }
+    palette_dirty = 1;
+}
+
+/* Re-resolve one pattern's indexed bytes against the live palette into its
+ * texture. Byte 0 stays transparent (alpha 0) regardless of entry 0's RGB:
+ * the engine-wide rule, mapped on zxn via the transparency register. */
+static void pattern_resolve(u8 pattern)
+{
+    u8 rgba[ATMA_PATTERN_BYTES * 4];
+    int i;
+
+    for (i = 0; i < ATMA_PATTERN_BYTES; ++i) {
+        const SDL_Color *c = &palette[pattern_bytes[pattern][i]];
+        rgba[i * 4 + 0] = c->r;
+        rgba[i * 4 + 1] = c->g;
+        rgba[i * 4 + 2] = c->b;
+        rgba[i * 4 + 3] = pattern_bytes[pattern][i] == 0 ? 0 : 255;
+    }
+    SDL_UpdateTexture(patterns[pattern], NULL, rgba, 16 * 4);
+}
+
+/* Push palette changes into every live pattern texture. Called once per
+ * frame at most; a palette edit between frames costs one batched refresh
+ * here, matching the Next's resolve-at-render semantics. */
+static void palette_flush(void)
+{
+    u8 p;
+
+    if (!palette_dirty) return;
+    for (p = 0; p < ATMA_MAX_PATTERNS_8BIT; ++p) {
+        if (pattern_live[p]) pattern_resolve(p);
+    }
+    palette_dirty = 0;
 }
 
 void atma_gfx_init(void)
@@ -108,6 +156,7 @@ void atma_gfx_shutdown(void)
         if (patterns[i]) SDL_DestroyTexture(patterns[i]);
         patterns[i] = NULL;
     }
+    memset(pattern_live, 0, sizeof pattern_live);
     if (screen) SDL_DestroyTexture(screen);
     screen = NULL;
     if (renderer) SDL_DestroyRenderer(renderer);
@@ -132,6 +181,10 @@ void atma_gfx_end_frame(void)
 {
     int i;
     if (!renderer || !screen) return;
+
+    /* Palette edits take effect on the frame that draws with them, like
+     * the Next resolving indices at render time. */
+    palette_flush();
 
     for (i = 0; i < ATMA_MAX_SPRITES; ++i) {
         const sprite_state *s = &sprites[i];
@@ -194,13 +247,15 @@ void atma_gfx_sprite_hide(u8 slot)
 void atma_gfx_palette_set(u8 index, u8 r, u8 g, u8 b)
 {
     palette[index] = palette_quantize(r, g, b);
+    /* Patterns hold indices, not colors: re-resolve them against the new
+     * entry before the next frame draws. Host parity with the Next, where
+     * this recolors every sprite using the index, instantly. */
+    palette_dirty = 1;
 }
 
 int atma_gfx_pattern_set_indexed(u8 pattern, const u8 *pixels)
 {
     SDL_Texture *t;
-    u8 rgba[ATMA_PATTERN_BYTES * 4];
-    int i;
 
     if (!renderer) {
         SDL_Log("atma: pattern %u uploaded before gfx init", pattern);
@@ -213,33 +268,27 @@ int atma_gfx_pattern_set_indexed(u8 pattern, const u8 *pixels)
         return -1;
     }
 
-    /* Resolve indices through the shared palette; 0 is transparent. */
-    for (i = 0; i < ATMA_PATTERN_BYTES; ++i) {
-        const SDL_Color *c = &palette[pixels[i]];
-        rgba[i * 4 + 0] = c->r;
-        rgba[i * 4 + 1] = c->g;
-        rgba[i * 4 + 2] = c->b;
-        rgba[i * 4 + 3] = pixels[i] == 0 ? 0 : 255;
-    }
+    /* Stash the indexed bytes: the palette can change later, and the
+     * pattern must re-resolve against it (palette hot-swap). */
+    memcpy(pattern_bytes[pattern], pixels, ATMA_PATTERN_BYTES);
 
-    t = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
-                          SDL_TEXTUREACCESS_STATIC, 16, 16);
+    t = patterns[pattern];
     if (!t) {
-        SDL_Log("atma: pattern %u texture creation failed: %s",
-                pattern, SDL_GetError());
-        return -1;
+        t = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
+                              SDL_TEXTUREACCESS_STATIC, 16, 16);
+        if (!t) {
+            SDL_Log("atma: pattern %u texture creation failed: %s",
+                    pattern, SDL_GetError());
+            return -1;
+        }
+        SDL_SetTextureScaleMode(t, SDL_SCALEMODE_NEAREST);
+        SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
+        patterns[pattern] = t;
+        pattern_w[pattern] = 16;
+        pattern_h[pattern] = 16;
     }
-    if (!SDL_UpdateTexture(t, NULL, rgba, 16 * 4)) {
-        SDL_Log("atma: pattern %u upload failed: %s", pattern, SDL_GetError());
-        SDL_DestroyTexture(t);
-        return -1;
-    }
-    SDL_SetTextureScaleMode(t, SDL_SCALEMODE_NEAREST);
-    SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
 
-    if (patterns[pattern]) SDL_DestroyTexture(patterns[pattern]);
-    patterns[pattern] = t;
-    pattern_w[pattern] = 16;
-    pattern_h[pattern] = 16;
+    pattern_live[pattern] = 1;
+    pattern_resolve(pattern);
     return 0;
 }

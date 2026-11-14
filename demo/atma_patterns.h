@@ -6,7 +6,7 @@
 
 /* Palette rows {index, r, g, b}: Next RGB333 values expanded to 8-bit
  * components. Entry 0 is the transparent color. */
-#define ATMA_PATTERNS_PALETTE_N 5
+#define ATMA_PATTERNS_PALETTE_N 7
 extern const unsigned char atma_patterns_palette[ATMA_PATTERNS_PALETTE_N][4];
 
 /* The image as 8 cell(s) of 16x16 palette indexes
