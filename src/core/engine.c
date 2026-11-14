@@ -1,7 +1,32 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+
+#include <stdio.h>
 #include "atma/engine.h"
 
 static u8 running;      /* cleared by atma_quit(); checked by the main loop */
 static u16 frame_count; /* ticks since atma_run() began; wraps at 65536 */
+
+/* Core's diagnostic sink: plain stderr. This is the default the engine
+ * links when a backend has nothing better (and the host never does).
+ * The zxn build overrides atma_log_backend (no console there) via the
+ * weak-symbol mechanism; GCC/Clang take the attribute, SDCC relies on
+ * the backend simply defining its own. */
+#if defined(__GNUC__) && !defined(__SDCC)
+__attribute__((weak))
+#endif
+#if !defined(__SDCC)
+void atma_log_backend(const char *msg)
+{
+    fprintf(stderr, "atma: %s\n", msg);
+}
+#else /* SDCC/zxn: no stdio stream; a real sink arrives with the backend */
+void atma_log_backend(const char *msg)
+{
+    (void)msg;
+}
+#endif
 
 void atma_quit(void)
 {
@@ -13,6 +38,11 @@ u16 atma_frame_count(void)
     return frame_count;
 }
 
+void atma_log(const char *msg)
+{
+    atma_log_backend(msg);
+}
+
 /*
  * The main loop, and the only place that knows the tick order:
  *
@@ -20,6 +50,11 @@ u16 atma_frame_count(void)
  *   update() -> sound_update() -> begin_frame() -> render() -> end_frame()
  *
  * Everything below it is per-backend, selected at link time by PLATFORM=.
+ *
+ * Failure policy: a backend that cannot start (no window, no renderer)
+ * must say so on stderr and leave a liveness flag the engine can check.
+ * The engine then refuses to enter the loop and reports failure to the
+ * caller, instead of running invisible at 60 Hz forever.
  */
 int atma_run(const atma_config *config)
 {
@@ -52,14 +87,26 @@ int atma_run(const atma_config *config)
 
     if (config->init) config->init();
 
+    /* The gfx backend reports startup failure through begin_frame's
+     * liveness return (documented in gfx.h); a run with no display would
+     * be invisible busywork, so fail the run here, loudly. */
+    if (!atma_gfx_begin_frame()) {
+        if (config->shutdown) config->shutdown();
+        atma_sound_shutdown();
+        atma_gfx_shutdown();
+        atma_input_shutdown();
+        atma_platform_shutdown();
+        return 1;
+    }
+
     running = 1;
     frame_count = 0;
     pending = 0;
 
     while (running) {
         /*
-         * pending accumulates refreshes actually elapsed — wait_frame()
-         * returns >= 1, more after an overrun — so a slow tick doesn't slow
+         * pending accumulates refreshes actually elapsed; wait_frame()
+         * returns >= 1, more after an overrun, so a slow tick doesn't slow
          * the game further. Surplus refreshes are dropped rather than
          * banked: at most one tick per pass, no catch-up spiral.
          */

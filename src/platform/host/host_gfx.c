@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+
 #include <SDL3/SDL.h>
 #include <string.h>
 #include "atma/gfx.h"
@@ -16,6 +20,12 @@
  * is scaled to the window, in whole-number steps. Sprites therefore snap to
  * the logical pixel grid just like Next hardware, instead of gliding over
  * sub-pixel window positions.
+ *
+ * Palette discipline: the host is not more capable than the Next. Colors
+ * are quantized to the Next's 9-bit RGB333 (see palette_quantize below), so
+ * the window shows byte-for-byte what the hardware will. Pattern uploads
+ * are indexed bytes resolved through the same table, exactly what the zxn
+ * backend pokes into sprite pattern memory.
  */
 
 #define SCALE_START 3
@@ -35,15 +45,27 @@ static u16 pattern_h[ATMA_MAX_PATTERNS];
 static sprite_state sprites[ATMA_MAX_SPRITES];
 static SDL_Color palette[256];
 
+/* The Next's RGB333 color space: 3 bits of red, 3 of green, 2 of blue
+ * (9-bit color, 512 distinct values, the same table its default palette
+ * uses). Quantize every entry so host and Next show identical colors. */
+static SDL_Color palette_quantize(u8 r, u8 g, u8 b)
+{
+    SDL_Color c;
+    c.r = (Uint8)(((r >> 5) * 255) / 7);
+    c.g = (Uint8)(((g >> 5) * 255) / 7);
+    c.b = (Uint8)(((b >> 6) * 255) / 3);
+    c.a = 255;
+    return c;
+}
+
 static void palette_default(void)
 {
     int i;
     /* RGB332 expansion, which is also the Next's default 8-bit palette. */
     for (i = 0; i < 256; ++i) {
-        palette[i].r = (Uint8)(((i >> 5) & 7) * 255 / 7);
-        palette[i].g = (Uint8)(((i >> 2) & 7) * 255 / 7);
-        palette[i].b = (Uint8)((i & 3) * 255 / 3);
-        palette[i].a = 255;
+        palette[i] = palette_quantize((u8)(((i >> 5) & 7) * 255 / 7),
+                                      (u8)(((i >> 2) & 7) * 255 / 7),
+                                      (u8)((i & 3) * 255 / 3));
     }
 }
 
@@ -57,12 +79,22 @@ void atma_gfx_init(void)
     window = SDL_CreateWindow("atma", pi->screen_w * SCALE_START,
                               pi->screen_h * SCALE_START,
                               SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY);
-    if (!window) return;
+    if (!window) {
+        SDL_Log("atma: could not create window: %s", SDL_GetError());
+        return;
+    }
     renderer = SDL_CreateRenderer(window, NULL);
-    if (!renderer) return;
+    if (!renderer) {
+        SDL_Log("atma: could not create renderer: %s", SDL_GetError());
+        return;
+    }
     screen = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
                                SDL_TEXTUREACCESS_TARGET, pi->screen_w, pi->screen_h);
-    if (!screen) return;
+    if (!screen) {
+        SDL_Log("atma: could not create %dx%d frame texture: %s",
+                pi->screen_w, pi->screen_h, SDL_GetError());
+        return;
+    }
     SDL_SetTextureScaleMode(screen, SDL_SCALEMODE_NEAREST);
     SDL_SetRenderLogicalPresentation(renderer, pi->screen_w, pi->screen_h,
                                      SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
@@ -90,9 +122,10 @@ void atma_host_toggle_fullscreen(void)
     SDL_SetWindowFullscreen(window, !(SDL_GetWindowFlags(window) & SDL_WINDOW_FULLSCREEN));
 }
 
-void atma_gfx_begin_frame(void)
+u8 atma_gfx_begin_frame(void)
 {
     if (screen) SDL_SetRenderTarget(renderer, screen);
+    return screen != NULL;
 }
 
 void atma_gfx_end_frame(void)
@@ -158,93 +191,55 @@ void atma_gfx_sprite_hide(u8 slot)
     if (slot < ATMA_MAX_SPRITES) sprites[slot].visible = 0;
 }
 
-void atma_host_palette_set(u8 index, u8 r, u8 g, u8 b)
+void atma_gfx_palette_set(u8 index, u8 r, u8 g, u8 b)
 {
-    palette[index].r = r;
-    palette[index].g = g;
-    palette[index].b = b;
-    palette[index].a = 255;
+    palette[index] = palette_quantize(r, g, b);
 }
 
-int atma_host_pattern_set_rgba(u8 pattern, u16 w, u16 h, const u8 *rgba)
+int atma_gfx_pattern_set_indexed(u8 pattern, const u8 *pixels)
 {
     SDL_Texture *t;
-    if (!renderer || !w || !h) return -1;
+    u8 rgba[ATMA_PATTERN_BYTES * 4];
+    int i;
+
+    if (!renderer) {
+        SDL_Log("atma: pattern %u uploaded before gfx init", pattern);
+        return -1;
+    }
+    if (!pixels) return -1;
+    if (pattern >= ATMA_MAX_PATTERNS_8BIT) {
+        SDL_Log("atma: pattern %u out of range (host stores 8-bit patterns "
+                "like the Next: 0..%d)", pattern, ATMA_MAX_PATTERNS_8BIT - 1);
+        return -1;
+    }
+
+    /* Resolve indices through the shared palette; 0 is transparent. */
+    for (i = 0; i < ATMA_PATTERN_BYTES; ++i) {
+        const SDL_Color *c = &palette[pixels[i]];
+        rgba[i * 4 + 0] = c->r;
+        rgba[i * 4 + 1] = c->g;
+        rgba[i * 4 + 2] = c->b;
+        rgba[i * 4 + 3] = pixels[i] == 0 ? 0 : 255;
+    }
 
     t = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
-                          SDL_TEXTUREACCESS_STATIC, w, h);
-    if (!t) return -1;
-    SDL_UpdateTexture(t, NULL, rgba, w * 4);
+                          SDL_TEXTUREACCESS_STATIC, 16, 16);
+    if (!t) {
+        SDL_Log("atma: pattern %u texture creation failed: %s",
+                pattern, SDL_GetError());
+        return -1;
+    }
+    if (!SDL_UpdateTexture(t, NULL, rgba, 16 * 4)) {
+        SDL_Log("atma: pattern %u upload failed: %s", pattern, SDL_GetError());
+        SDL_DestroyTexture(t);
+        return -1;
+    }
     SDL_SetTextureScaleMode(t, SDL_SCALEMODE_NEAREST);
     SDL_SetTextureBlendMode(t, SDL_BLENDMODE_BLEND);
 
     if (patterns[pattern]) SDL_DestroyTexture(patterns[pattern]);
     patterns[pattern] = t;
-    pattern_w[pattern] = w;
-    pattern_h[pattern] = h;
+    pattern_w[pattern] = 16;
+    pattern_h[pattern] = 16;
     return 0;
-}
-
-int atma_host_image_load(const char *path, u8 pattern, u16 w, u16 h)
-{
-    SDL_Surface *loaded, *rgba, *scaled;
-    int ok = -1;
-
-    if (!renderer) return -1;
-    loaded = SDL_LoadPNG(path);
-    if (!loaded) loaded = SDL_LoadBMP(path);
-    if (!loaded) return -1;
-    rgba = SDL_ConvertSurface(loaded, SDL_PIXELFORMAT_RGBA32);
-    SDL_DestroySurface(loaded);
-    if (!rgba) return -1;
-    scaled = SDL_ScaleSurface(rgba, w, h, SDL_SCALEMODE_LINEAR);
-    SDL_DestroySurface(rgba);
-    if (!scaled) return -1;
-    ok = atma_host_pattern_set_rgba(pattern, w, h, scaled->pixels);
-    SDL_DestroySurface(scaled);
-    return ok;
-}
-
-int atma_host_spritesheet_load(const char *path, u16 frame_w, u16 frame_h,
-                               u8 first_pattern)
-{
-    SDL_Surface *loaded, *sheet;
-    int cols, rows, r, c, count = 0;
-
-    if (!renderer || !frame_w || !frame_h) return -1;
-
-    loaded = SDL_LoadPNG(path);
-    if (!loaded) loaded = SDL_LoadBMP(path);
-    if (!loaded) return -1;
-    sheet = SDL_ConvertSurface(loaded, SDL_PIXELFORMAT_RGBA32);
-    SDL_DestroySurface(loaded);
-    if (!sheet) return -1;
-
-    cols = sheet->w / frame_w;
-    rows = sheet->h / frame_h;
-    for (r = 0; r < rows; ++r) {
-        for (c = 0; c < cols; ++c) {
-            SDL_Surface *frame;
-            int idx = first_pattern + count;
-            SDL_Rect src;
-            int ok;
-
-            if (idx >= ATMA_MAX_PATTERNS) goto done;
-            src.x = c * frame_w;
-            src.y = r * frame_h;
-            src.w = frame_w;
-            src.h = frame_h;
-            frame = SDL_CreateSurface(frame_w, frame_h, SDL_PIXELFORMAT_RGBA32);
-            if (!frame) goto done;
-            SDL_SetSurfaceBlendMode(sheet, SDL_BLENDMODE_NONE);
-            SDL_BlitSurface(sheet, &src, frame, NULL);
-            ok = atma_host_pattern_set_rgba((u8)idx, frame_w, frame_h, frame->pixels);
-            SDL_DestroySurface(frame);
-            if (ok != 0) goto done;
-            ++count;
-        }
-    }
-done:
-    SDL_DestroySurface(sheet);
-    return count;
 }

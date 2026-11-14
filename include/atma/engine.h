@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+
 #ifndef ATMA_ENGINE_H
 #define ATMA_ENGINE_H
 
@@ -59,8 +63,9 @@ typedef struct {
 /*
  * Run the game. Owns the whole platform lifecycle (platform/input/gfx/sound
  * init before the loop, shutdown after) and blocks until atma_quit() is
- * called or the backend raises ATMA_BTN_QUIT. Returns 0 on a normal exit
- * (the return value is reserved for future error codes).
+ * called or the backend raises ATMA_BTN_QUIT. Returns 0 on a normal exit,
+ * nonzero when the platform could not start (window/graphics failure); a
+ * nonzero return means the loop never ran.
  */
 int atma_run(const atma_config *config);
 
@@ -70,7 +75,14 @@ int atma_run(const atma_config *config);
 void atma_quit(void);
 
 /* Ticks since atma_run() started. Wraps at 65536 (~18 min at 60 fps), so
- * don't keep absolute time with it — diff two samples instead. */
+ * don't keep absolute time with it; diff two samples instead. */
 u16 atma_frame_count(void);
+
+/* One portable diagnostic line, for games and engine code alike. Goes to
+ * stderr (via SDL) on host; on boot targets it goes wherever the backend
+ * can put it (or nowhere, if the machine has no console). Never a
+ * gameplay control flow tool: it's for the "this should never happen"
+ * messages that save a debugging session. */
+void atma_log(const char *msg);
 
 #endif

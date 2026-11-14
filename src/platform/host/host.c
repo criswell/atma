@@ -1,3 +1,7 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+
 #include <SDL3/SDL.h>
 #include "atma/platform.h"
 #include "atma/input.h"
@@ -11,18 +15,53 @@
  * This file owns SDL lifetime, frame pacing and input. Graphics live in
  * host_gfx.c and sound in host_sound.c. The logical machine is the ZX
  * Spectrum Next (256x192, 64 sprites); the window scales it.
+ *
+ * Pacing philosophy, same as every backend: display_hz reports the true
+ * video refresh and the engine paces to it. zxn forces 60 Hz in hardware
+ * (NextReg 0x05); the host can't force the monitor, so it asks SDL what
+ * the display actually runs at and reports that. VSync then agrees with
+ * the deadline pacer by construction instead of fighting it on monitors
+ * whose refresh doesn't divide 60.
+ *
+ * Failure policy: every SDL call that can start the run is checked, and
+ * each failure gets one SDL_Log line (goes to stderr). SDL_Init failure
+ * leaves the info struct reporting 60 Hz; gfx refuses to begin frames and
+ * atma_run() returns nonzero, so a dead run is loud and quick, not a
+ * silent process pacing forever.
  */
 
-static const atma_platform_info info = { "host", 60, ATMA_SCREEN_W, ATMA_SCREEN_H };
 static Uint64 next_ns;
 static Uint64 frame_ns;
 static u16 quit_requested;
+
+/* Ask SDL what the primary display actually refreshes at, so the engine
+ * paces to real hardware. Returns 60 with a log line if unanswerable. */
+static u8 detect_display_hz(void)
+{
+    SDL_DisplayID display = SDL_GetPrimaryDisplay();
+    const SDL_DisplayMode *mode = display ? SDL_GetCurrentDisplayMode(display) : NULL;
+    u8 hz;
+
+    if (mode && mode->refresh_rate > 0.0f) {
+        hz = (u8)(mode->refresh_rate + 0.5f);
+        if (hz) return hz;
+    }
+    SDL_Log("atma: could not query display refresh (%s), assuming 60",
+            SDL_GetError());
+    return 60;
+}
+
+static atma_platform_info info = { "host", 60, ATMA_SCREEN_W, ATMA_SCREEN_H };
 
 const atma_platform_info *atma_platform_info_get(void) { return &info; }
 
 void atma_platform_init(void)
 {
-    SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS);
+    if (!SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)) {
+        SDL_Log("atma: SDL_Init failed: %s", SDL_GetError());
+        return;
+    }
+    info.display_hz = detect_display_hz();
     frame_ns = SDL_NS_PER_SECOND / info.display_hz;
     next_ns = SDL_GetTicksNS();
 }

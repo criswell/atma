@@ -1,30 +1,53 @@
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
+
 #include "atma/engine.h"
-#ifdef ATMA_PLATFORM_HOST
-#include "atma/host.h"
-#endif
+#include "atma_patterns.h"
 
 /*
- * Bouncing-logo demo: a blue gradient with an image ricocheting off the
- * screen edges, DVD-screensaver style. Run from the repo root:
- *   make GAME_DIR=demo run
+ * Bouncing-logo demo: a blue/green gradient with the atma logo ricocheting
+ * off the screen edges, DVD-screensaver style. Fully portable: no #ifdef,
+ * no runtime files. The logo is 8 generated 16x16 cell patterns
+ * (demo/atma_patterns.c, from atma.png via tools/mkpats.py) drawn as a
+ * 4x2 grid through sprite slots, exactly what Next hardware shows.
+ *
+ * Run from the repo root: make GAME_DIR=demo run
  */
 
-#define LOGO_W 52
-#define LOGO_H 24
+/* Grid geometry of the generated cells, and the screen position of the
+ * logo's top-left corner. */
+#define LOGO_CELLS_X ATMA_PATTERNS_COLS       /* 4 */
+#define LOGO_CELLS_Y ATMA_PATTERNS_ROWS       /* 2 */
+#define LOGO_W (LOGO_CELLS_X * 16)            /* 64 */
+#define LOGO_H (LOGO_CELLS_Y * 16)            /* 32 */
+
+/* Slot n in row-major grid order; slot 0 is the logo's top-left cell. */
+#define LOGO_SLOT(cx, cy) (u8)((cy) * LOGO_CELLS_X + (cx))
 
 static i16 x = 40, y = 30;
 static i8 dx = 2, dy = 1;
 
 static void on_init(void)
 {
-#ifdef ATMA_PLATFORM_HOST
     u8 i;
-    /* Gradient uses palette indices 0..191, one per scanline. */
-    for (i = 0; i < ATMA_SCREEN_H; ++i) {
-        atma_host_palette_set(i, 0, (u8)(i / 6), (u8)(70 + i * 185 / ATMA_SCREEN_H));
+    /* Load the generator's palette rows into the engine table at the same
+     * slots the cell bytes use: row i of atma_patterns_palette holds
+     * {engine index, r, g, b}, so cell byte N means engine palette slot N. */
+    for (i = 0; i < ATMA_PATTERNS_PALETTE_N; ++i) {
+        atma_gfx_palette_set(atma_patterns_palette[i][0],
+                             atma_patterns_palette[i][1],
+                             atma_patterns_palette[i][2],
+                             atma_patterns_palette[i][3]);
     }
-    atma_host_spritesheet_load("demo/atma.png", LOGO_W, LOGO_H, 0);
-#endif
+
+    /* Upload each generated cell as its own engine pattern. Cells already
+     * carry palette indices; index 0 is transparent on every backend. */
+    for (i = 0; i < ATMA_PATTERNS_CELLS; ++i) {
+        if (atma_gfx_pattern_set_indexed(i, atma_patterns_cells[i]) != 0) {
+            atma_log("demo: pattern upload failed; logo will not draw");
+        }
+    }
 }
 
 static void on_update(void)
@@ -41,15 +64,27 @@ static void on_update(void)
 
 static void on_render(void)
 {
-    u8 line;
-    for (line = 0; line < ATMA_SCREEN_H; ++line) {
-        atma_gfx_hline(line, line);
+    u8 cx, cy;
+
+    /* Gradient: palette index tracks the scanline, blue fading to green. */
+    for (cx = 0; cx < ATMA_SCREEN_H; ++cx) {
+        atma_gfx_hline(cx, (u8)(1 + cx % 60));
     }
-    atma_gfx_sprite_set(0, x, y, 0, 0);
+
+    for (cy = 0; cy < LOGO_CELLS_Y; ++cy) {
+        for (cx = 0; cx < LOGO_CELLS_X; ++cx) {
+            atma_gfx_sprite_set(LOGO_SLOT(cx, cy),
+                                (i16)(x + cx * 16), (i16)(y + cy * 16),
+                                LOGO_SLOT(cx, cy), 0);
+        }
+    }
 }
 
 int main(void)
 {
+    /* 60 fps at full tilt; shutdown is NULL because the demo holds no
+     * resources of its own. Field order: target_fps, cpu_speed, init,
+     * update, render, shutdown (see atma_config in engine.h). */
     atma_config cfg = { 60, ATMA_CPU_FASTEST, on_init, on_update, on_render, 0 };
     return atma_run(&cfg);
 }
