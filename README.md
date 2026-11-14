@@ -17,6 +17,37 @@ retro computers, but which can also build on modern PCs.
 - SDL3 (3.4 or newer, with development headers)
 - Python 3 (to run tools/mkpats.py, the asset generator; standard library only)
 
+## ZX Spectrum Next (PLATFORM=zxn)
+
+- The **z88dk** toolchain, built from source (distro packages are too old
+  for the Next's Z80N instructions and SDCC variant). A git checkout
+  built with `./build.sh`; the tree this repo is developed against is
+  `~/work/z88dk` (v2.5+, current-ish master).
+- Two environment variables, from z88dk's `set_environment.sh`:
+
+  ```
+  export PATH=~/path/to/z88dk/bin:$PATH
+  export ZCCCFG=~/path/to/z88dk/lib/config
+  ```
+
+  `ZCCCFG` is the one that bites: without it `zcc +zxn` cannot find the
+  zxn target config and dies confusingly.
+- Binaries a zxn build actually touches, all from that `bin/`: `zcc`
+  (frontend that drives everything), `zsdcc`/`z88dk-zsdcc` (the SDCC
+  compiler proper), `z80asm`, `z88dk-ucpp` (preprocessor), `z88dk-copt`
+  (peephole pass), `z88dk-appmake` (produces the `.nex`).
+- Build prerequisites for z88dk itself: `gcc`/`clang`, `make`, `autoconf`,
+  `libxml2` and its dev headers, `boost` and its dev headers, git. The
+  build is long; see z88dk's docs.
+- **zxnext_sprite** (github.com/stefanbylund/zxnext_sprite): thin C
+  wrapper over the Next's hardware-sprite I/O ports, with prebuilt
+  `lib/sdcc_iy/zxnext_sprite.lib` matching the engine's `-clib=sdcc_iy`
+  convention. It joins the link when the zxn gfx backend stops being a
+  stub. A sibling repo, `~/work/zxnext_sprite`, has the sources and a
+  demo.
+- Running the output: a `.nex` file boots on real Next hardware (from the
+  SD card menu) or in an emulator (CSpect, ZEsarUX, zx).
+
 # DESIGN NOTES
 
 ## One palette, the Next's colors
