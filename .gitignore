@@ -1,3 +1,7 @@
 build/
 *.swp
 Session.vim
+*.zsf
+*.idx
+*.plist
+compile_commands.json
