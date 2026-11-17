@@ -4,6 +4,8 @@
 
 #include <arch/zxn.h>
 #include <intrinsic.h>
+#include <string.h>
+#include <im2.h>
 #include <z80.h>
 #include "atma/platform.h"
 #include "atma/gfx.h"
@@ -23,13 +25,31 @@ static u8 frames_taken;         /* last count consumed by the engine */
 
 const atma_platform_info *atma_platform_info_get(void) { return &info; }
 
+/* Place the 257-byte vector table at 0x8000 (256-byte aligned) and jump vector at 0x8181.
+ * Adjust addresses if your linker memory map uses 0x8000-0x8183 for code/BSS. */
+#define IM2_TABLE_ADDR  ((void *)0x8000)
+#define IM2_VECTOR_BYTE 0x81
+
+IM2_DEFINE_ISR(frame_isr)
+{
+    ++frames_seen;
+}
+
 void atma_platform_init(void)
 {
     frames_seen = 0;
     frames_taken = 0;
-    /* TODO: install IM2 frame ISR incrementing frames_seen; force 60Hz via NextReg 0x05.
-     * Until that lands, wait_frame() below spins forever — there is no ISR
-     * to move frames_seen. */
+
+    /* 1. Force 60 Hz refresh via NextReg 0x05 (bit 2) */
+    u8 periph1 = ZXN_READ_REG(REG_PERIPHERAL_1);
+    ZXN_NEXTREGA(REG_PERIPHERAL_1, periph1 | 0x04);
+
+    /* 2. Set up 257-byte IM2 vector table and install frame_isr */
+    intrinsic_di();
+    im2_Init(IM2_TABLE_ADDR);
+    memset(IM2_TABLE_ADDR, IM2_VECTOR_BYTE, 257);
+    im2_InstallISR(IM2_VECTOR_BYTE, frame_isr);
+    intrinsic_ei();
 }
 
 void atma_platform_shutdown(void) {}
