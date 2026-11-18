@@ -11,13 +11,14 @@
  *
  * Frame pacing polls the raster instead of using HALT. Two facts about this
  * target force that: the zxn CRT starts with interrupts disabled
- * (TAR__crt_enable_eidi = 0x01 in crt_config.inc) and the 48K model maps RAM
- * page 0 at 0x0000, so there is no ROM interrupt handler at 0x0038. A HALT
- * would therefore never resume, and IM 1 would jump into empty RAM. IM 2
- * would work but needs a 257-byte page-aligned vector table plus an ISR
- * living in the same 256-byte page, which is a lot of machinery for a frame
- * tick. Polling NextReg 0x1F costs a few dozen T-states per sample and needs
- * no table, no ISR and no assumption about the memory map.
+ * (TAR__crt_enable_eidi = 0x01 in crt_config.inc) and neither this program
+ * nor its crt installs any interrupt vector at 0x0038, so a HALT would
+ * never resume and IM 1 would jump to whatever the boot environment left
+ * there. IM 2 would work but needs a 257-byte page-aligned vector table
+ * plus an ISR living in the same 256-byte page, which is a lot of machinery
+ * for a frame tick. Polling NextReg 0x1F costs a few dozen T-states per
+ * sample and needs no table, no ISR and no assumption about the memory
+ * map.
  *
  * The cost is that an overrun is never reported: wait_frame always returns 1,
  * so the engine's frame divisor still paces the game but never sees a skipped
@@ -56,9 +57,18 @@ void atma_platform_shutdown(void) {}
 
 void atma_platform_set_cpu_speed(atma_cpu_speed speed)
 {
-    /* The enum values match the turbo encoding 1:1: 0=28 MHz, 1=56, 2=112,
-     * 3=224. */
+    /* The turbo register's ladder is 3.5 / 7 / 14 / 28 MHz (the RTM_*
+     * constants in z88dk's arch/zxn.h); 28 is the TBBlue maximum. The
+     * enum's values map onto it 1:1, slowest to fastest. */
     ZXN_WRITE_REG(REG_TURBO_MODE, (u8)speed);
+}
+
+/* SDCC builds have no console and the core defines no default log sink
+ * there (no weak symbols under SDCC), so the zxn backend supplies its own.
+ * A real sink can replace this without touching the core. */
+void atma_log_backend(const char *msg)
+{
+    (void)msg;
 }
 
 u8 atma_platform_wait_frame(void)

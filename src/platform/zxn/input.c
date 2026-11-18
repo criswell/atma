@@ -8,8 +8,10 @@
 
 /*
  * ZX Next input backend. Two sources collapse into the same ATMA_BTN_*
- * bitmask: the Kempston joystick on port 0x1F (five active-low bits) and the
- * Spectrum keyboard, scanned a row at a time through port 0xFE with one bit
+ * bitmask: the Kempston joystick on port 0x1F (five active-high bits;
+ * pressed directions and fire read back as 1s, the classic Kempston
+ * convention the Next and every emulator implement) and the Spectrum
+ * keyboard, scanned a row at a time through port 0xFE with one bit
  * of A15..A8 pulled low to select the row.
  *
  * Keyboard mapping follows the usual Spectrum convention - Q/A/O/P for the
@@ -39,7 +41,7 @@ void atma_input_backend_shutdown(void) {}
 u16 atma_input_backend_read(void)
 {
     u16 b = 0;
-    u8 kempston = (u8)~z80_inp(KEMPSTON_PORT);
+    u8 kempston = z80_inp(KEMPSTON_PORT);
 
     if (kempston & KEMP_UP)    b |= ATMA_BTN_UP;
     if (kempston & KEMP_DOWN)  b |= ATMA_BTN_DOWN;

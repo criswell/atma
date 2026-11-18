@@ -82,7 +82,13 @@ u16 atma_frame_count(void);
  * stderr (via SDL) on host; on boot targets it goes wherever the backend
  * can put it (or nowhere, if the machine has no console). Never a
  * gameplay control flow tool: it's for the "this should never happen"
- * messages that save a debugging session. */
+ * messages that save a debugging session.
+ *
+ * Backends implement the sink: atma_log_backend receives the message.
+ * GCC/Clang builds get a weak stderr default in the core; SDCC builds
+ * (no weak symbols) get no core default, so every SDCC backend must
+ * define this. */
+void atma_log_backend(const char *msg);
 void atma_log(const char *msg);
 
 #endif

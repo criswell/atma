@@ -3,7 +3,7 @@
 #include "atma_patterns.h"
 
 const unsigned char atma_patterns_palette[ATMA_PATTERNS_PALETTE_N][4] = {
-    { 0, 0, 0, 0 },
+    { 0, 0, 0, 145 },
     { 1, 0, 0, 0 },
     { 2, 0, 0, 72 },
     { 3, 0, 0, 255 },

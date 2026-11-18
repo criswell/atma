@@ -8,23 +8,17 @@
 static u8 running;      /* cleared by atma_quit(); checked by the main loop */
 static u16 frame_count; /* ticks since atma_run() began; wraps at 65536 */
 
-/* Core's diagnostic sink: plain stderr. This is the default the engine
- * links when a backend has nothing better (and the host never does).
- * The zxn build overrides atma_log_backend (no console there) via the
- * weak-symbol mechanism; GCC/Clang take the attribute, SDCC relies on
- * the backend simply defining its own. */
-#if defined(__GNUC__) && !defined(__SDCC)
+/* Core's diagnostic sink. GCC/Clang builds get a weak stderr default that a
+ * backend may override. SDCC has no weak symbols, so the core defines
+ * nothing there and every SDCC backend supplies its own atma_log_backend
+ * (the zxn one is a no-op: no console on the target). */
+#if !defined(__SDCC)
+#if defined(__GNUC__)
 __attribute__((weak))
 #endif
-#if !defined(__SDCC)
 void atma_log_backend(const char *msg)
 {
     fprintf(stderr, "atma: %s\n", msg);
-}
-#else /* SDCC/zxn: no stdio stream; a real sink arrives with the backend */
-void atma_log_backend(const char *msg)
-{
-    (void)msg;
 }
 #endif
 
@@ -77,6 +71,8 @@ int atma_run(const atma_config *config)
      */
     divisor = 1;
     if (config->target_fps && config->target_fps < info->display_hz) {
+        /* (zsdcc emits warning 110, "conditional flow changed by
+         * optimizer", on this expression: benign optimizer noise.) */
         divisor = (u8)(((u16)info->display_hz + config->target_fps / 2)
                        / config->target_fps);
     }

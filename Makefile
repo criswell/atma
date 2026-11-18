@@ -25,8 +25,9 @@ $(TARGET): $(SRCS)
 	$(CC) $(CFLAGS) $^ $(LIBS) -o $@
 else ifeq ($(PLATFORM),zxn)
 # ZX Spectrum Next build via zcc (z88dk): SDCC backend, size-optimized,
-# emitting a .nex file. The sprite/Layer 2/vt_sound libs join when the gfx
-# and sound backends stop being stubs; nothing references them yet.
+# emitting a .nex file. The gfx backend drives the Next's hardware ports
+# directly, so no sprite library joins the link; the remaining planned
+# library is vt_sound, when the sound backend stops being a stub.
 CC      := zcc
 CFLAGS  := +zxn -vn -SO3 --opt-code-size -clib=sdcc_iy -Iinclude
 TARGET  := $(BUILD)/atma.nex
@@ -35,13 +36,24 @@ $(TARGET): $(SRCS)
 	$(CC) $(CFLAGS) $^ -startup=31 -create-app -subtype=nex -o $(BUILD)/atma
 endif
 
+# ZEsarUX (native Linux Next emulator) used by `make PLATFORM=zxn run`.
+# Looked up on PATH by name; override with ZESARUX=/path/to/zesarux.
+# NB: ZEsarUX loads its machine ROMs from the real binary's own directory,
+# so a name that resolves through a symlink into elsewhere can fail with
+# "Unable to open rom file tbblue_loader.rom". If that happens, point
+# ZESARUX at the real binary.
+ZESARUX ?= zesarux
+
 .PHONY: run clean
 run: $(TARGET)
 ifeq ($(PLATFORM),host)
 	./$(TARGET)
 else
-	@echo "$(TARGET) is a ZX Next program: load it from an SD card on real"
-	@echo "hardware, or open it in an emulator (CSpect, ZEsarUX, zx)."
+	@command -v $(ZESARUX) >/dev/null 2>&1 || { \
+	  echo "ZEsarUX not found as '$(ZESARUX)'. Install it, or point at the binary:"; \
+	  echo "  make PLATFORM=zxn GAME_DIR=demo run ZESARUX=/path/to/zesarux"; \
+	  exit 1; }
+	$(ZESARUX) --noconfigfile --machine TBBlue --snap $(TARGET)
 endif
 clean:
 	rm -rf build

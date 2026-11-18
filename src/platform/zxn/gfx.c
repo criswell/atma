@@ -13,12 +13,14 @@
  *
  * Layer 2 (256x192, 8bpp) is the background: atma_gfx_clear and
  * atma_gfx_hline write palette indices straight into the three 16K banks the
- * mode occupies (9, 10, 11). The CPU has no permanent window onto Layer 2
+ * mode occupies (8, 9, 10). The CPU has no permanent window onto Layer 2
  * memory, so writes page one 8K page at a time into MMU slot 1
- * (0x2000-0x3FFF). That slot is ROM in the 48K model this backend is built
- * for, and the engine never calls into ROM, so nothing is restored
- * afterwards. A scanline is 256 bytes and a page is 8192, so no hline ever
- * straddles a page boundary.
+ * (0x2000-0x3FFF). Nothing this program links lives there: the crt places
+ * code from 0x8000 up (verified against the link map), the crt starts with
+ * interrupts disabled so nothing will ever vector through that area, and the
+ * program does not return to the boot environment mid-run, so the slot is
+ * never restored. A scanline is 256 bytes and a page is 8192, so no hline
+ * ever straddles a page boundary.
  *
  * Hardware sprites back atma_gfx_sprite_set: 64 slots, 16x16, 8bpp, with 16K
  * of pattern memory = 64 patterns of 256 bytes, exactly what
@@ -32,8 +34,11 @@
 #define ZXN_REG_LAYER2_CONTROL 0x69
 #define L2_ENABLE 0x80
 
-/* 256x192 8bpp Layer 2 lives in 16K banks 9, 10 and 11 (48K total). */
-#define L2_BANK_FIRST 9
+/* 256x192 8bpp Layer 2 lives in 16K banks 8, 9 and 10 (48K total): NextReg
+ * 0x12 (Layer 2 RAM page) resets to 8, and the shadow Layer 2 (NextReg 0x13)
+ * resets to 11, so 8/9/10 is the only main-vs-shadow split the boot state
+ * permits. Bank 11 is the shadow's first strip, not the screen's last. */
+#define L2_BANK_FIRST 8
 #define L2_PAGE_BYTES 8192
 
 /* MMU slot 1: 0x2000-0x3FFF, one 8K Layer 2 page at a time. */
@@ -70,7 +75,9 @@ void atma_gfx_init(void)
                   RSLS_SPRITES_VISIBLE | RSLS_SPRITES_OVER_BORDER |
                   RSLS_LAYER_PRIORITY_SLU);
 
-    /* Index 0 is the engine-wide transparent color for sprites. */
+    /* Sprite transparency: boot value until the game's palette arrives.
+     * Entry 0's own color drives this register from then on (see
+     * atma_gfx_palette_set). */
     ZXN_WRITE_REG(REG_SPRITE_TRANSPARENCY_INDEX, 0);
 
     /* Power-on palette: RGB332, the same table the host backend starts from,
@@ -117,12 +124,30 @@ void atma_gfx_palette_set(u8 index, u8 r, u8 g, u8 b)
      * engine exposes one table, so both get the entry. */
     palette_entry(RPC_SELECT_LAYER_2_PALETTE_0, index, r, g, b);
     palette_entry(RPC_SELECT_SPRITES_PALETTE_0, index, r, g, b);
+
+    /* Sprite transparency on the Next is a color match, not an index match:
+     * NextReg 0x4B holds one 8-bit RRRGGGBB value, and every sprite-palette
+     * entry whose top 8 bits equal it draws transparent (so a value always
+     * covers two RGB333 entries). Deriving the register from entry 0's own
+     * color keeps the engine's index-0 rule exact on hardware, provided
+     * entry 0's 8-bit color is unique among the palette's used entries;
+     * mkpats guarantees that when it generates assets. */
+    if (index == 0) {
+        ZXN_WRITE_REG(REG_SPRITE_TRANSPARENCY_INDEX,
+                      (u8)(((r >> 5) << 5) | (((g >> 5) & 7) << 2)
+                           | ((b >> 6) & 3)));
+    }
 }
 
 void atma_gfx_sprite_set(u8 slot, i16 x, i16 y, u8 pattern, u8 flags)
 {
-    u16 ux = (u16)x;
-    u16 uy = (u16)y;
+    /* The sprite coordinate system is border-based 320x256 even when
+     * sprites never draw on the border: screen (0, 0) is attribute
+     * (32, 32), so add the border margin before splitting into attribute
+     * bytes. Partially off-screen placements keep working: screen -16
+     * becomes border 16, just left of the visible area. */
+    u16 ux = (u16)(x + 32);
+    u16 uy = (u16)(y + 32);
 
     if (slot >= ATMA_MAX_SPRITES) return;
 
@@ -146,8 +171,12 @@ void atma_gfx_sprite_hide(u8 slot)
 
     if (slot >= ATMA_MAX_SPRITES) return;
 
+    /* Four bytes, not five: byte 4 written with the E bit clear marks a
+     * complete four-byte attribute record, and the hardware's attribute
+     * pointer advances to the next slot right here. A fifth write would
+     * land in that slot's X LSB and corrupt it. */
     IO_SPRITE_SLOT = slot;
-    for (i = 0; i < 5; ++i) IO_SPRITE_ATTRIBUTE = 0;
+    for (i = 0; i < 4; ++i) IO_SPRITE_ATTRIBUTE = 0;
 }
 
 int atma_gfx_pattern_set_indexed(u8 pattern, const u8 *pixels)

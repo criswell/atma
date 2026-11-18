@@ -15,10 +15,10 @@
 #include "types.h"
 
 /*
- * Clock speed request, ordered slowest to fastest. The numeric values are
- * chosen to map straight onto the ZX Next turbo register (0 = 28 MHz,
- * 1 = 56, 2 = 112, 3 = 224), so zxn can cast and write directly. Backends
- * without a speed control silently ignore the request.
+ * Clock speed request, ordered slowest to fastest. The numeric values map
+ * straight onto the ZX Next turbo register's ladder (0 = 3.5 MHz, 1 = 7,
+ * 2 = 14, 3 = 28, the hardware maximum), so zxn can cast and write
+ * directly. Backends without a speed control silently ignore the request.
  */
 typedef enum {
     ATMA_CPU_SLOW = 0,

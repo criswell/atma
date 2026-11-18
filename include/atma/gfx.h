@@ -56,6 +56,13 @@ void atma_gfx_hline(u8 y, u8 color);
  * Entries are live state, not upload-time constants: changing one recolors
  * every drawn pixel that references the index, sprites included, on the
  * next frame, on every platform. Palette animation is therefore portable.
+ *
+ * Entry 0's color is reserved: the Next matches sprite transparency by an
+ * 8-bit color value rather than by index, so entry 0's color must be
+ * unique among the palette's used entries (mkpats enforces this by giving
+ * entry 0 a marker color no other entry shares; the zxn backend derives
+ * the hardware transparency register from entry 0 whenever it is set).
+ * Backgrounds should not rely on entry 0 rendering as a visible color.
  */
 void atma_gfx_palette_set(u8 index, u8 r, u8 g, u8 b);
 
@@ -84,8 +91,10 @@ int atma_gfx_pattern_set_indexed(u8 pattern, const u8 *pixels);
 /*
  * Hardware limits every backend honours; the Next is the ceiling. ATMA_
  * MAX_PATTERNS bounds engine pattern ids; on the Next, 8-bit patterns cap
- * at 64 (ATMA_MAX_PATTERNS_8BIT) and 4-bit at 128. A backend must fail
- * (return -1, log one stderr line) rather than silently drop an upload
+ * at 64 (ATMA_MAX_PATTERNS_8BIT) and 4-bit at 128. Sprite slots are capped
+ * at 64 too: the useful set on the Next (64 patterns, the 64-per-scanline
+ * limit), even though the slot register itself addresses 128. A backend
+ * must fail (return -1, log one line) rather than silently drop an upload
  * beyond what it stores.
  */
 #define ATMA_MAX_SPRITES  64

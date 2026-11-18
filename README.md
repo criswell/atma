@@ -39,14 +39,19 @@ retro computers, but which can also build on modern PCs.
 - Build prerequisites for z88dk itself: `gcc`/`clang`, `make`, `autoconf`,
   `libxml2` and its dev headers, `boost` and its dev headers, git. The
   build is long; see z88dk's docs.
-- **zxnext_sprite** (github.com/stefanbylund/zxnext_sprite): thin C
-  wrapper over the Next's hardware-sprite I/O ports, with prebuilt
-  `lib/sdcc_iy/zxnext_sprite.lib` matching the engine's `-clib=sdcc_iy`
-  convention. It joins the link when the zxn gfx backend stops being a
-  stub. A sibling repo, `~/work/zxnext_sprite`, has the sources and a
-  demo.
+- **zxnext_sprite** (github.com/stefanbylund/zxnext_sprite): the reference
+  C API and documentation for the Next's hardware sprites. The engine's
+  gfx backend drives the I/O ports directly (mirroring this repo's
+  slot-select, attribute and pattern-upload flows), so it is a
+  documentation and cross-check dependency rather than a link dependency.
+  A clone of the repo serves as that reference.
 - Running the output: a `.nex` file boots on real Next hardware (from the
-  SD card menu) or in an emulator (CSpect, ZEsarUX, zx).
+  SD card menu) or in an emulator. `make PLATFORM=zxn GAME_DIR=demo run`
+  boots it in ZEsarUX, the native Linux Next emulator (CSpect works too,
+  under WINE). ZEsarUX is looked up on PATH; override with
+  `ZESARUX=/path/to/zesarux` if it lives elsewhere. Note that ZEsarUX
+  loads its machine ROMs from the real binary's own directory, so a
+  symlinked path can fail ROM loading; point at the real binary if so.
 
 # DESIGN NOTES
 
@@ -62,7 +67,13 @@ Palette entries are live state: change one and every pixel using that
 index, sprites included, recolors on the next frame, on every platform.
 Palette animation is portable.
 
-Index 0 is the transparent color for sprites on every backend.
+Index 0 is the transparent color for sprites on every backend. On the
+Next, sprite transparency is matched by color, not index: the hardware
+compares every sprite-palette entry's top 8 bits against one register
+value, so entry 0's color must be unique among the palette's used entries
+or its 8-bit neighbors turn transparent too. `mkpats.py` handles this by
+giving entry 0 a marker color no real color shares, and the zxn backend
+derives the transparency register from entry 0 whenever it is set.
 
 ## Assets are compiled in
 

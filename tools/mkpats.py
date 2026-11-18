@@ -6,11 +6,13 @@ Usage: python3 tools/mkpats.py <image.png> <output-base>
 Outputs <output-base>.h and <output-base>.c containing:
 
   - the image's palette as {index, r, g, b} rows: entry 0 is the
-    transparent color (source pixels with alpha < 128); every other color
-    is quantized to the ZX Spectrum Next's 9-bit RGB333 space (3 bits red,
-    3 green, 3 blue; 512 colors) and expanded back to 8-bit components, so
-    the numbers are exactly what both the host window and the Next
-    hardware show;
+    transparent color (source pixels with alpha < 128). Its RGB is a
+    marker chosen so no real color shares its 8-bit RRRGGGBB form,
+    because the ZX Spectrum Next matches sprite transparency by color,
+    not index; every other color is quantized to the Next's 9-bit RGB333
+    space (3 bits red, 3 green, 3 blue; 512 colors) and expanded back to
+    8-bit components, so the numbers are exactly what both the host
+    window and the Next hardware show;
 
   - the image sliced into 16x16 cell patterns (the Next's native sprite
     atom), each cell one byte per pixel holding a palette index from that
@@ -141,8 +143,10 @@ def main():
     w, h, pixels = read_png(png)
 
     # Palette: entry 0 = transparent, then first-seen order after RGB333
-    # quantization.
-    palette = [(0, 0, 0, 0)]
+    # quantization. Entry 0 carries a marker color chosen below: the Next
+    # matches sprite transparency by 8-bit color, not index, so entry 0's
+    # color must not share its RRRGGGBB byte with any real color.
+    palette = [None]  # entry 0 placeholder; the marker color is chosen below
     index_of = {}
     for r, g, b, alpha in pixels:
         if alpha < 128:
@@ -154,6 +158,19 @@ def main():
                     "quantization; simplify the art")
             index_of[key] = len(palette)
             palette.append((len(palette), *key))
+
+    def byte333(r, g, b):
+        """The 8-bit RRRGGGBB form the Next's transparency match uses."""
+        return ((r >> 5) << 5) | ((g >> 5) << 2) | (b >> 6)
+
+    used = {byte333(r, g, b) for _i, r, g, b in palette[1:]}
+    marker = next((c for c in range(256) if c not in used), None)
+    if marker is None:
+        die(f"{png}: every 8-bit color value used; no unique transparent "
+            "marker exists, simplify the art")
+    # Expand the marker byte to the RGB333 color it names (blue LSB 0).
+    mr, mg, mb = (marker >> 5) & 7, (marker >> 2) & 7, (marker & 3) << 1
+    palette[0] = (0, mr * 255 // 7, mg * 255 // 7, mb * 255 // 7)
 
     # Slice into cells, row-major, padding edge cells with transparency.
     cols = (w + CELL - 1) // CELL
@@ -188,7 +205,9 @@ def main():
 #define {guard}
 
 /* Palette rows {{index, r, g, b}}: Next RGB333 values expanded to 8-bit
- * components. Entry 0 is the transparent color. */
+ * components. Entry 0 is the transparent color; its RGB is a marker the
+ * generator picks so no real color shares its 8-bit form, because the
+ * Next matches sprite transparency by color, not index. */
 #define {stem.upper()}_PALETTE_N {len(palette)}
 extern const unsigned char {stem}_palette[{stem.upper()}_PALETTE_N][4];
 
