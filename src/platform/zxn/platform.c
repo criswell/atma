@@ -3,74 +3,69 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
 #include <arch/zxn.h>
-#include <intrinsic.h>
-#include <string.h>
-#include <im2.h>
-#include <z80.h>
 #include "atma/platform.h"
 #include "atma/gfx.h"
 
 /*
  * ZX Spectrum Next backend — platform entry points.
  *
- * Notes on the hardware model: the frame counter below is meant to be bumped
- * from an IM2 interrupt service routine fired once per display refresh, so
- * "wait a frame" costs one HALT, and the 60 Hz refresh is forced via
- * NextReg 0x05 regardless of the machine's HDMI vs VGA timing.
+ * Frame pacing polls the raster instead of using HALT. Two facts about this
+ * target force that: the zxn CRT starts with interrupts disabled
+ * (TAR__crt_enable_eidi = 0x01 in crt_config.inc) and the 48K model maps RAM
+ * page 0 at 0x0000, so there is no ROM interrupt handler at 0x0038. A HALT
+ * would therefore never resume, and IM 1 would jump into empty RAM. IM 2
+ * would work but needs a 257-byte page-aligned vector table plus an ISR
+ * living in the same 256-byte page, which is a lot of machinery for a frame
+ * tick. Polling NextReg 0x1F costs a few dozen T-states per sample and needs
+ * no table, no ISR and no assumption about the memory map.
+ *
+ * The cost is that an overrun is never reported: wait_frame always returns 1,
+ * so the engine's frame divisor still paces the game but never sees a skipped
+ * refresh.
+ *
+ * Register writes go through ZXN_WRITE_REG rather than the ZXN_NEXTREGA
+ * macro: the macro relies on the peephole pass rewriting the call into an
+ * inline OUT, and a plain library call links unconditionally.
  */
 
+/* Raster line to sync on. The active video line counts 0..311, so low byte
+ * 192 occurs exactly once per frame and is unambiguous. */
+#define FRAME_SYNC_LINE 192
+
 static const atma_platform_info info = { "zxn", 60, ATMA_SCREEN_W, ATMA_SCREEN_H };
-static volatile u8 frames_seen; /* owned by the frame ISR */
-static u8 frames_taken;         /* last count consumed by the engine */
 
 const atma_platform_info *atma_platform_info_get(void) { return &info; }
 
-/* Place the 257-byte vector table at 0x8000 (256-byte aligned) and jump vector at 0x8181.
- * Adjust addresses if your linker memory map uses 0x8000-0x8183 for code/BSS. */
-#define IM2_TABLE_ADDR  ((void *)0x8000)
-#define IM2_VECTOR_BYTE 0x81
-
-IM2_DEFINE_ISR(frame_isr)
-{
-    ++frames_seen;
-}
-
 void atma_platform_init(void)
 {
-    frames_seen = 0;
-    frames_taken = 0;
+    u8 periph1;
+    u8 periph2;
 
-    /* 1. Force 60 Hz refresh via NextReg 0x05 (bit 2) */
-    u8 periph1 = ZXN_READ_REG(REG_PERIPHERAL_1);
-    ZXN_NEXTREGA(REG_PERIPHERAL_1, periph1 | 0x04);
+    /* Force the 60 Hz refresh (NextReg 0x05 bit 2) so the engine's pacing
+     * and the game's target_fps agree regardless of HDMI vs VGA timing. */
+    periph1 = ZXN_READ_REG(REG_PERIPHERAL_1);
+    ZXN_WRITE_REG(REG_PERIPHERAL_1, (u8)(periph1 | RP1_RATE_60));
 
-    /* 2. Set up 257-byte IM2 vector table and install frame_isr */
-    intrinsic_di();
-    im2_Init(IM2_TABLE_ADDR);
-    memset(IM2_TABLE_ADDR, IM2_VECTOR_BYTE, 257);
-    im2_InstallISR(IM2_VECTOR_BYTE, frame_isr);
-    intrinsic_ei();
+    /* Unlock the turbo register. Without this bit REG_TURBO_MODE writes are
+     * ignored and atma_platform_set_cpu_speed silently does nothing. */
+    periph2 = ZXN_READ_REG(REG_PERIPHERAL_2);
+    ZXN_WRITE_REG(REG_PERIPHERAL_2, (u8)(periph2 | RP2_ENABLE_TURBO));
 }
 
 void atma_platform_shutdown(void) {}
 
 void atma_platform_set_cpu_speed(atma_cpu_speed speed)
 {
-    /* Runtime register write: ZXN_NEXTREG() token-pastes its arguments, so
-     * the value must go through the A-register variant (ZXN_NEXTREGA). The
-     * enum values match the turbo encoding 1:1: 0=28 MHz, 1=56, 2=112, 3=224. */
-    ZXN_NEXTREGA(REG_TURBO_MODE, (u8)speed);
+    /* The enum values match the turbo encoding 1:1: 0=28 MHz, 1=56, 2=112,
+     * 3=224. */
+    ZXN_WRITE_REG(REG_TURBO_MODE, (u8)speed);
 }
 
 u8 atma_platform_wait_frame(void)
 {
-    u8 n;
-    /* HALT parks the CPU until the next interrupt, i.e. the next refresh.
-     * The u8 subtraction handles frames_seen's wraparound for free. */
-    while (frames_seen == frames_taken) {
-        intrinsic_halt();
+    /* Spin until the raster reaches the sync line, which happens once per
+     * refresh. */
+    while (ZXN_READ_REG(REG_ACTIVE_VIDEO_LINE_L) != FRAME_SYNC_LINE) {
     }
-    n = (u8)(frames_seen - frames_taken);
-    frames_taken = frames_seen;
-    return n;
+    return 1;
 }

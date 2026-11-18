@@ -37,6 +37,11 @@ endif
 
 .PHONY: run clean
 run: $(TARGET)
+ifeq ($(PLATFORM),host)
 	./$(TARGET)
+else
+	@echo "$(TARGET) is a ZX Next program: load it from an SD card on real"
+	@echo "hardware, or open it in an emulator (CSpect, ZEsarUX, zx)."
+endif
 clean:
 	rm -rf build
