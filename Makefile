@@ -8,6 +8,19 @@
 # GAME_DIR picks the program to build (default game; try GAME_DIR=demo).
 PLATFORM ?= host
 GAME_DIR ?= game
+
+# Typo guards. make silently ignores unknown variables, so a misspelled
+# GAME_* assignment quietly builds the default program instead
+# (GAME_IDIR=demo once built `game` and looked like a black-screen bug).
+# Catch both a misspelled GAME_* variable and a GAME_DIR with no sources.
+UNKNOWN_GAME_VARS := $(filter-out GAME_DIR,$(filter GAME_%,$(.VARIABLES)))
+ifneq ($(UNKNOWN_GAME_VARS),)
+$(error Unknown variable: $(UNKNOWN_GAME_VARS). make ignores unknown variables. Did you mean GAME_DIR? GAME_DIR is currently '$(GAME_DIR)')
+endif
+ifeq ($(wildcard $(GAME_DIR)/*.c),)
+$(error GAME_DIR '$(GAME_DIR)' contains no .c files. Dirs with sources: $(foreach d,$(wildcard */),$(if $(wildcard $(d)*.c),$(d))))
+endif
+
 BUILD    := build/$(PLATFORM)/$(notdir $(GAME_DIR))
 CORE     := $(wildcard src/core/*.c)
 PLAT     := $(wildcard src/platform/$(PLATFORM)/*.c)
