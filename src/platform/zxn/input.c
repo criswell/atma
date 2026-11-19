@@ -2,37 +2,50 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+/**
+ * \file input.c
+ * \brief ZX Next input backend: Kempston joystick and keyboard matrix.
+ * \ingroup input
+ */
+
 #include <arch/zxn.h>
 #include <z80.h>
 #include "atma/input.h"
 
-/*
- * ZX Next input backend. Two sources collapse into the same ATMA_BTN_*
- * bitmask: the Kempston joystick on port 0x1F (five active-high bits;
- * pressed directions and fire read back as 1s, the classic Kempston
- * convention the Next and every emulator implement) and the Spectrum
- * keyboard, scanned a row at a time through port 0xFE with one bit
- * of A15..A8 pulled low to select the row.
+/**
+ * \brief ZX Next input backend.
+ *
+ * Two sources collapse into the same ATMA_BTN_* bitmask: the Kempston
+ * joystick on port 0x1F (five active-high bits; pressed directions and fire
+ * read back as 1s, the classic Kempston convention the Next and every
+ * emulator implement) and the Spectrum keyboard, scanned a row at a time
+ * through port 0xFE with one bit of A15..A8 pulled low to select the row.
  *
  * Keyboard mapping follows the usual Spectrum convention - Q/A/O/P for the
  * four directions, SPACE to fire, ENTER to start - and BREAK (CAPS SHIFT +
  * SPACE) is the quit gesture the engine's ATMA_BTN_QUIT check expects.
  */
 
+/** Kempston joystick port. */
 #define KEMPSTON_PORT 0x1F
-#define KEMP_RIGHT 0x01
-#define KEMP_LEFT  0x02
-#define KEMP_DOWN  0x04
-#define KEMP_UP    0x08
-#define KEMP_FIRE  0x10
+#define KEMP_RIGHT 0x01 /**< Kempston right bit. */
+#define KEMP_LEFT  0x02 /**< Kempston left bit. */
+#define KEMP_DOWN  0x04 /**< Kempston down bit. */
+#define KEMP_UP    0x08 /**< Kempston up bit. */
+#define KEMP_FIRE  0x10 /**< Kempston fire bit. */
 
-/* Read one keyboard half-row; bits 0-4 come back active low. */
+/**
+ * \brief Read one keyboard half-row; bits 0-4 come back active low.
+ * \param row Half-row selector, 0..7.
+ * \return Low five bits of the port, active low.
+ */
 static u8 kbd_row(u8 row)
 {
     u16 port = (u16)(0xFE | ((u16)(~(1u << row) & 0xFF) << 8));
     return (u8)(z80_inp(port) & 0x1F);
 }
 
+/** True when the key at \p row / \p bit is held (active-low matrix). */
 #define KEY_DOWN(row, bit) ((kbd_row(row) & (1u << (bit))) == 0)
 
 void atma_input_backend_init(void) {}

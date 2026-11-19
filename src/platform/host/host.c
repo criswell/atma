@@ -2,6 +2,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+/**
+ * \file host.c
+ * \brief Host backend: SDL lifetime, frame pacing and input.
+ * \ingroup platform
+ */
+
 #include <SDL3/SDL.h>
 #include "atma/platform.h"
 #include "atma/input.h"
@@ -9,8 +15,8 @@
 #include "atma/engine.h"
 #include "host_internal.h"
 
-/*
- * Host backend (the desktop build), on SDL3.
+/**
+ * \brief Host backend (the desktop build), on SDL3.
  *
  * This file owns SDL lifetime, frame pacing and input. Graphics live in
  * host_gfx.c and sound in host_sound.c. The logical machine is the ZX
@@ -23,19 +29,26 @@
  * the deadline pacer by construction instead of fighting it on monitors
  * whose refresh doesn't divide 60.
  *
- * Failure policy: every SDL call that can start the run is checked, and
- * each failure gets one SDL_Log line (goes to stderr). SDL_Init failure
- * leaves the info struct reporting 60 Hz; gfx refuses to begin frames and
- * atma_run() returns nonzero, so a dead run is loud and quick, not a
- * silent process pacing forever.
+ * \note Failure policy: every SDL call that can start the run is checked,
+ *       and each failure gets one SDL_Log line (goes to stderr). SDL_Init
+ *       failure leaves the info struct reporting 60 Hz; gfx refuses to
+ *       begin frames and atma_run() returns nonzero, so a dead run is loud
+ *       and quick, not a silent process pacing forever.
  */
 
+/** Absolute deadline of the next frame, in nanoseconds. */
 static Uint64 next_ns;
+/** Nominal frame duration, in nanoseconds. */
 static Uint64 frame_ns;
+/** Sticky ATMA_BTN_QUIT raised by an SDL_QUIT event. */
 static u16 quit_requested;
 
-/* Ask SDL what the primary display actually refreshes at, so the engine
- * paces to real hardware. Returns 60 with a log line if unanswerable. */
+/**
+ * \brief Ask SDL what the primary display actually refreshes at, so the
+ *        engine paces to real hardware.
+ * \return Detected refresh rate in Hz, or 60 with a log line if
+ *         unanswerable.
+ */
 static u8 detect_display_hz(void)
 {
     SDL_DisplayID display = SDL_GetPrimaryDisplay();

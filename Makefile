@@ -66,6 +66,13 @@ DOCS_API   := $(DOCS_DIR)/api
 DOCS_XML   := build/doxygen/xml
 DOCS_SITE  := build/docs/site
 DOXYFILE   := Doxyfile
+DOCS_TPL   := tools/doxybook2/templates
+# doxybook2 slugifies "_" to "-" in link anchors but leaves the headings it
+# emits untouched, so every function anchor would miss its heading. Keep
+# underscores intact so anchors match. useFolders=false keeps every page in
+# docs/api itself: doxybook2 writes links relative to the output root, which
+# only resolve when the linking page sits in that same directory.
+DOXYBOOK2_CONFIG := {"replaceUnderscoresInAnchors": false, "useFolders": false}
 DOXYGEN    ?= doxygen
 DOXYBOOK2  ?= doxybook2
 ZENSICAL   ?= zensical
@@ -99,7 +106,14 @@ docs-api:
 	  exit 1; }
 	$(DOXYGEN) $(DOXYFILE)
 	rm -rf $(DOCS_API)
-	$(DOXYBOOK2) --input $(DOCS_XML) --output $(DOCS_API)
+	@mkdir -p $(DOCS_API)
+	$(DOXYBOOK2) --input $(DOCS_XML) --output $(DOCS_API) \
+	  --templates $(DOCS_TPL) --config-data '$(DOXYBOOK2_CONFIG)'
+	@# doxybook2 links files/dirs/pages with synthetic "#file-...", "#dir-..."
+	@# and "#page-..." anchors that no heading in the target page defines, so
+	@# drop them and let the links land on the page itself.
+	find $(DOCS_API) -name '*.md' -print0 | xargs -0 sed -i -E \
+	  's/(\.md)#(file|dir|page)-[^)]*/\1/g'
 
 docs-serve: docs-api
 	@command -v $(ZENSICAL) >/dev/null 2>&1 || { \

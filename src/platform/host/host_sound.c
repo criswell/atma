@@ -2,9 +2,14 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+/**
+ * \file host_sound.c
+ * \brief Host sound: stubs until an audio backend (SDL audio) exists.
+ * \ingroup sound
+ */
+
 #include "atma/sound.h"
 
-/* Host sound: stubs until an audio backend (SDL audio) exists. */
 void atma_sound_init(void) {}
 void atma_sound_shutdown(void) {}
 void atma_sound_update(void) {}

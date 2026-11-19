@@ -2,30 +2,39 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+/**
+ * \file main.c
+ * \brief Bouncing-logo demo: a gradient with the atma logo ricocheting off
+ *        the screen edges.
+ */
+
 #include "atma/engine.h"
 #include "atma_patterns.h"
 
-/*
- * Bouncing-logo demo: a blue/green gradient with the atma logo ricocheting
- * off the screen edges, DVD-screensaver style. Fully portable: no #ifdef,
- * no runtime files. The logo is 8 generated 16x16 cell patterns
- * (demo/atma_patterns.c, from atma.png via tools/mkpats.py) drawn as a
- * 4x2 grid through sprite slots, exactly what Next hardware shows.
+/**
+ * \brief Bouncing-logo demo.
  *
- * Run from the repo root: make GAME_DIR=demo run
+ * A blue/green gradient with the atma logo ricocheting off the screen edges,
+ * DVD-screensaver style. Fully portable: no #ifdef, no runtime files. The
+ * logo is 8 generated 16x16 cell patterns (demo/atma_patterns.c, from
+ * atma.png via tools/mkpats.py) drawn as a 4x2 grid through sprite slots,
+ * exactly what Next hardware shows.
+ *
+ * Run from the repo root: `make GAME_DIR=demo run`
  */
 
-/* Grid geometry of the generated cells, and the screen position of the
- * logo's top-left corner. */
+/** Grid geometry of the generated cells. */
 #define LOGO_CELLS_X ATMA_PATTERNS_COLS       /* 4 */
 #define LOGO_CELLS_Y ATMA_PATTERNS_ROWS       /* 2 */
 #define LOGO_W (LOGO_CELLS_X * 16)            /* 64 */
 #define LOGO_H (LOGO_CELLS_Y * 16)            /* 32 */
 
-/* Slot n in row-major grid order; slot 0 is the logo's top-left cell. */
+/** Slot n in row-major grid order; slot 0 is the logo's top-left cell. */
 #define LOGO_SLOT(cx, cy) (u8)((cy) * LOGO_CELLS_X + (cx))
 
+/** Screen position of the logo's top-left corner. */
 static i16 x = 40, y = 30;
+/** Per-tick velocity, in logical pixels. */
 static i8 dx = 2, dy = 1;
 
 static void on_init(void)

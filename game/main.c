@@ -2,13 +2,20 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+/**
+ * \file main.c
+ * \brief Minimal game: clears the screen and quits on START.
+ */
+
 #include "atma/engine.h"
 
+/** \brief Quit when START is pressed. */
 static void on_update(void)
 {
     if (atma_input_pressed() & ATMA_BTN_START) atma_quit();
 }
 
+/** \brief Clear the screen to palette index 0. */
 static void on_render(void)
 {
     atma_gfx_clear(0);

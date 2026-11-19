@@ -2,12 +2,18 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+/**
+ * \file platform.c
+ * \brief ZX Spectrum Next backend: platform entry points.
+ * \ingroup platform
+ */
+
 #include <arch/zxn.h>
 #include "atma/platform.h"
 #include "atma/gfx.h"
 
-/*
- * ZX Spectrum Next backend - platform entry points.
+/**
+ * \brief ZX Spectrum Next backend - platform entry points.
  *
  * Frame pacing polls the raster instead of using HALT. Two facts about this
  * target force that: the zxn CRT starts with interrupts disabled
@@ -20,17 +26,22 @@
  * sample and needs no table, no ISR and no assumption about the memory
  * map.
  *
- * The cost is that an overrun is never reported: wait_frame always returns 1,
- * so the engine's frame divisor still paces the game but never sees a skipped
- * refresh.
+ * \note The cost is that an overrun is never reported: wait_frame always
+ *       returns 1, so the engine's frame divisor still paces the game but
+ *       never sees a skipped refresh.
  *
- * Register writes go through ZXN_WRITE_REG rather than the ZXN_NEXTREGA
- * macro: the macro relies on the peephole pass rewriting the call into an
- * inline OUT, and a plain library call links unconditionally.
+ * \note Register writes go through ZXN_WRITE_REG rather than the
+ *       ZXN_NEXTREGA macro: the macro relies on the peephole pass rewriting
+ *       the call into an inline OUT, and a plain library call links
+ *       unconditionally.
  */
 
-/* Raster line to sync on. The active video line counts 0..311, so low byte
- * 192 occurs exactly once per frame and is unambiguous. */
+/**
+ * \brief Raster line to sync on.
+ *
+ * The active video line counts 0..311, so low byte 192 occurs exactly once
+ * per frame and is unambiguous.
+ */
 #define FRAME_SYNC_LINE 192
 
 static const atma_platform_info info = { "zxn", 60, ATMA_SCREEN_W, ATMA_SCREEN_H };
@@ -63,9 +74,15 @@ void atma_platform_set_cpu_speed(atma_cpu_speed speed)
     ZXN_WRITE_REG(REG_TURBO_MODE, (u8)speed);
 }
 
-/* SDCC builds have no console and the core defines no default log sink
+/**
+ * \brief ZX Next diagnostic sink.
+ *
+ * SDCC builds have no console and the core defines no default log sink
  * there (no weak symbols under SDCC), so the zxn backend supplies its own.
- * A real sink can replace this without touching the core. */
+ * A real sink can replace this without touching the core.
+ *
+ * \param msg Ignored: the target has no console.
+ */
 void atma_log_backend(const char *msg)
 {
     (void)msg;

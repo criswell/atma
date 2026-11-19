@@ -109,7 +109,9 @@ make docs-clean  # drop generated XML, Markdown and site output
 
 `docs/` holds handwritten guides; `docs/api/` is generated from the sources by
 doxybook2 and is gitignored, so never edit it by hand. Doxygen reads
-`Doxyfile`, Zensical reads `zensical.toml`.
+`Doxyfile`, Zensical reads `zensical.toml`, and
+`tools/doxybook2/templates/header.tmpl` overrides doxybook2's default page
+frontmatter so summaries containing a colon stay valid YAML.
 
 # DEMO
 

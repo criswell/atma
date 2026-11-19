@@ -2,14 +2,20 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+/**
+ * \file gfx.c
+ * \brief ZX Next graphics backend: Layer 2 background and hardware sprites.
+ * \ingroup gfx
+ */
+
 #include <arch/zxn.h>
 #include <string.h>
 #include "atma/engine.h"
 #include "atma/gfx.h"
 #include "atma/platform.h"
 
-/*
- * ZX Next graphics backend.
+/**
+ * \brief ZX Next graphics backend.
  *
  * Layer 2 (256x192, 8bpp) is the background: atma_gfx_clear and
  * atma_gfx_hline write palette indices straight into the three 16K banks the
@@ -30,21 +36,28 @@
  * the host backend's hot-swap behaviour.
  */
 
-/* Layer 2 control (NextReg 0x69) is not in z88dk's arch/zxn.h. */
+/** Layer 2 control (NextReg 0x69) is not in z88dk's arch/zxn.h. */
 #define ZXN_REG_LAYER2_CONTROL 0x69
-#define L2_ENABLE 0x80
+#define L2_ENABLE 0x80 /**< Layer 2 enable bit in NextReg 0x69. */
 
-/* 256x192 8bpp Layer 2 lives in 16K banks 8, 9 and 10 (48K total): NextReg
+/**
+ * \brief First Layer 2 bank.
+ *
+ * 256x192 8bpp Layer 2 lives in 16K banks 8, 9 and 10 (48K total): NextReg
  * 0x12 (Layer 2 RAM page) resets to 8, and the shadow Layer 2 (NextReg 0x13)
  * resets to 11, so 8/9/10 is the only main-vs-shadow split the boot state
- * permits. Bank 11 is the shadow's first strip, not the screen's last. */
+ * permits. Bank 11 is the shadow's first strip, not the screen's last.
+ */
 #define L2_BANK_FIRST 8
-#define L2_PAGE_BYTES 8192
+#define L2_PAGE_BYTES 8192 /**< Bytes per MMU page. */
 
-/* MMU slot 1: 0x2000-0x3FFF, one 8K Layer 2 page at a time. */
+/** MMU slot 1: 0x2000-0x3FFF, one 8K Layer 2 page at a time. */
 #define L2_WINDOW ((u8 *)0x2000)
 
-/* Map the 8K page holding `offset` into the Layer 2 window. */
+/**
+ * \brief Map the 8K page holding \p offset into the Layer 2 window.
+ * \param offset Byte offset into the 48K Layer 2 area.
+ */
 static void l2_map(u16 offset)
 {
     u8 bank = (u8)(offset >> 14);
@@ -52,8 +65,18 @@ static void l2_map(u16 offset)
     ZXN_WRITE_REG(REG_MMU1, (u8)(((L2_BANK_FIRST + bank) << 1) | page));
 }
 
-/* One 9-bit RGB333 palette entry, written as the two-byte value form so the
- * low blue bit survives: first byte RRRGGGBB, second byte bit 0 = blue LSB. */
+/**
+ * \brief Write one 9-bit RGB333 palette entry.
+ *
+ * Written as the two-byte value form so the low blue bit survives: first
+ * byte RRRGGGBB, second byte bit 0 = blue LSB.
+ *
+ * \param control Palette control value selecting the target palette.
+ * \param index Entry to write.
+ * \param r Red channel, 8-bit.
+ * \param g Green channel, 8-bit.
+ * \param b Blue channel, 8-bit.
+ */
 static void palette_entry(u8 control, u8 index, u8 r, u8 g, u8 b)
 {
     ZXN_WRITE_REG(REG_PALETTE_CONTROL, control);

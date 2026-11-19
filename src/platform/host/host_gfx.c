@@ -2,6 +2,12 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+/**
+ * \file host_gfx.c
+ * \brief Host graphics on the SDL3 renderer.
+ * \ingroup gfx
+ */
+
 #include <SDL3/SDL.h>
 #include <string.h>
 #include "atma/gfx.h"
@@ -9,12 +15,13 @@
 #include "atma/platform.h"
 #include "host_internal.h"
 
-/*
- * Host graphics on the SDL3 renderer. The renderer's logical presentation
- * pins the drawing space to the Next's 256x192 and letterboxes it into the
- * window, so resizing and fullscreen rescale automatically (nearest
- * neighbour, so pixels stay crisp). Sprites draw in slot order, higher slots
- * on top, like the Next.
+/**
+ * \brief Host graphics on the SDL3 renderer.
+ *
+ * The renderer's logical presentation pins the drawing space to the Next's
+ * 256x192 and letterboxes it into the window, so resizing and fullscreen
+ * rescale automatically (nearest neighbour, so pixels stay crisp). Sprites
+ * draw in slot order, higher slots on top, like the Next.
  *
  * The frame is rasterized into a real 256x192 target texture and only that
  * is scaled to the window, in whole-number steps. Sprites therefore snap to
@@ -31,12 +38,14 @@
  * resolves indices at render time.
  */
 
+/** Initial window scale factor, in logical pixels per window pixel. */
 #define SCALE_START 3
 
+/** Per-slot sprite state, as set by atma_gfx_sprite_set(). */
 typedef struct {
-    i16 x, y;
-    u8 pattern, flags;
-    u8 visible;
+    i16 x, y;        /**< Screen position in logical pixels. */
+    u8 pattern, flags; /**< Pattern id and ATMA_SPR_* attribute bits. */
+    u8 visible;      /**< Cleared by atma_gfx_sprite_hide(). */
 } sprite_state;
 
 static SDL_Window *window;
@@ -48,19 +57,27 @@ static u16 pattern_h[ATMA_MAX_PATTERNS];
 static sprite_state sprites[ATMA_MAX_SPRITES];
 static SDL_Color palette[256];
 
-/* Raw indexed bytes of every uploaded pattern, kept so the palette can be
- * re-resolved on change (hot-swap parity with the Next, where pattern
- * memory holds indices and the hardware resolves them against the live
- * palette every frame). 64 x 256 bytes = 16K: exactly the Next's sprite
- * pattern memory. pattern_live marks slots with an SDL texture to update. */
+/**
+ * \brief Raw indexed bytes of every uploaded pattern, kept so the palette
+ *        can be re-resolved on change.
+ *
+ * Hot-swap parity with the Next, where pattern memory holds indices and the
+ * hardware resolves them against the live palette every frame. 64 x 256
+ * bytes = 16K: exactly the Next's sprite pattern memory. pattern_live marks
+ * slots with an SDL texture to update.
+ */
 static u8 pattern_bytes[ATMA_MAX_PATTERNS_8BIT][ATMA_PATTERN_BYTES];
 static u8 pattern_live[ATMA_MAX_PATTERNS_8BIT];
 static u8 palette_dirty;
 
-/* The Next's RGB333 color space: 3 bits of red, 3 of green, 3 of blue
- * (9-bit color, 512 distinct values). Quantize every entry so host and
- * Next show identical colors. The Next's default palette is its RGB332
- * subset (the engine starts there via palette_default). */
+/**
+ * \brief The Next's RGB333 color space: 3 bits of red, 3 of green, 3 of
+ *        blue (9-bit color, 512 distinct values).
+ *
+ * Quantize every entry so host and Next show identical colors. The Next's
+ * default palette is its RGB332 subset (the engine starts there via
+ * palette_default).
+ */
 static SDL_Color palette_quantize(u8 r, u8 g, u8 b)
 {
     SDL_Color c;
@@ -85,9 +102,13 @@ static void palette_default(void)
     palette_dirty = 1;
 }
 
-/* Re-resolve one pattern's indexed bytes against the live palette into its
- * texture. Byte 0 stays transparent (alpha 0) regardless of entry 0's RGB:
- * the engine-wide rule, mapped on zxn via the transparency register. */
+/**
+ * \brief Re-resolve one pattern's indexed bytes against the live palette
+ *        into its texture.
+ *
+ * Byte 0 stays transparent (alpha 0) regardless of entry 0's RGB: the
+ * engine-wide rule, mapped on zxn via the transparency register.
+ */
 static void pattern_resolve(u8 pattern)
 {
     u8 rgba[ATMA_PATTERN_BYTES * 4];
@@ -103,9 +124,12 @@ static void pattern_resolve(u8 pattern)
     SDL_UpdateTexture(patterns[pattern], NULL, rgba, 16 * 4);
 }
 
-/* Push palette changes into every live pattern texture. Called once per
- * frame at most; a palette edit between frames costs one batched refresh
- * here, matching the Next's resolve-at-render semantics. */
+/**
+ * \brief Push palette changes into every live pattern texture.
+ *
+ * Called once per frame at most; a palette edit between frames costs one
+ * batched refresh here, matching the Next's resolve-at-render semantics.
+ */
 static void palette_flush(void)
 {
     u8 p;

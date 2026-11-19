@@ -2,11 +2,19 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+/**
+ * \file input.c
+ * \brief Core input state: edge detection over the backend snapshots.
+ * \ingroup input
+ */
+
 #include "atma/input.h"
 
-/*
- * Core input state: the current and previous backend snapshots. The whole
- * job of core input is to hold these two and derive edges from them.
+/**
+ * \brief Core input state: the current and previous backend snapshots.
+ *
+ * The whole job of core input is to hold these two and derive edges from
+ * them.
  */
 static u16 cur;
 static u16 prev;
@@ -22,8 +30,12 @@ void atma_input_shutdown(void)
     atma_input_backend_shutdown();
 }
 
-/* Slide the snapshot window: prev becomes last tick's state, cur the
- * backend's state now. One call per tick keeps the edges meaningful. */
+/**
+ * \brief Slide the snapshot window.
+ *
+ * prev becomes last tick's state, cur the backend's state now. One call per
+ * tick keeps the edges meaningful.
+ */
 void atma_input_poll(void)
 {
     prev = cur;

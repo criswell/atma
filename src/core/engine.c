@@ -2,16 +2,28 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this
  * file, You can obtain one at https://mozilla.org/MPL/2.0/. */
 
+/**
+ * \file engine.c
+ * \brief The main loop, frame pacing and the core diagnostic sink.
+ * \ingroup engine
+ */
+
 #include <stdio.h>
 #include "atma/engine.h"
 
-static u8 running;      /* cleared by atma_quit(); checked by the main loop */
-static u16 frame_count; /* ticks since atma_run() began; wraps at 65536 */
+/** Cleared by atma_quit(); checked by the main loop. */
+static u8 running;
+/** Ticks since atma_run() began; wraps at 65536. */
+static u16 frame_count;
 
-/* Core's diagnostic sink. GCC/Clang builds get a weak stderr default that a
- * backend may override. SDCC has no weak symbols, so the core defines
- * nothing there and every SDCC backend supplies its own atma_log_backend
- * (the zxn one is a no-op: no console on the target). */
+/**
+ * \brief Core's diagnostic sink.
+ *
+ * GCC/Clang builds get a weak stderr default that a backend may override.
+ * SDCC has no weak symbols, so the core defines nothing there and every
+ * SDCC backend supplies its own atma_log_backend (the zxn one is a no-op: no
+ * console on the target).
+ */
 #if !defined(__SDCC)
 #if defined(__GNUC__)
 __attribute__((weak))
@@ -37,18 +49,19 @@ void atma_log(const char *msg)
     atma_log_backend(msg);
 }
 
-/*
- * The main loop, and the only place that knows the tick order:
+/**
+ * \brief The main loop, and the only place that knows the tick order.
  *
- *   wait for refresh -> (skip if not due) -> poll input -> QUIT check ->
- *   update() -> sound_update() -> begin_frame() -> render() -> end_frame()
+ * Each tick runs, in order: wait for the next refresh (skipping the tick if
+ * it is not due yet), poll input, check ATMA_BTN_QUIT, then update(),
+ * sound_update(), begin_frame(), render() and end_frame().
  *
  * Everything below it is per-backend, selected at link time by PLATFORM=.
  *
- * Failure policy: a backend that cannot start (no window, no renderer)
- * must say so on stderr and leave a liveness flag the engine can check.
- * The engine then refuses to enter the loop and reports failure to the
- * caller, instead of running invisible at 60 Hz forever.
+ * \note Failure policy: a backend that cannot start (no window, no renderer)
+ *       must say so on stderr and leave a liveness flag the engine can
+ *       check. The engine then refuses to enter the loop and reports failure
+ *       to the caller, instead of running invisible at 60 Hz forever.
  */
 int atma_run(const atma_config *config)
 {
