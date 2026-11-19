@@ -1,0 +1,35 @@
+# Doxygen configuration for atma.
+#
+# This file deliberately sets only what the pipeline needs: XML output for
+# doxybook2 to consume. HTML and LaTeX are off because Zensical renders the
+# site; letting Doxygen emit its own HTML would produce a second, competing
+# set of pages. Everything not named here keeps Doxygen's default.
+
+PROJECT_NAME           = "atma"
+PROJECT_BRIEF          = "Cross-platform retro engine"
+
+# XML lands in build/doxygen/xml (OUTPUT_DIRECTORY + XML_OUTPUT).
+OUTPUT_DIRECTORY       = build/doxygen
+GENERATE_HTML          = NO
+GENERATE_LATEX         = NO
+GENERATE_XML           = YES
+XML_OUTPUT             = xml
+XML_PROGRAMLISTING     = NO
+
+# Public headers plus the implementation, so internal statics are documented
+# too. EXTRACT_ALL keeps undocumented symbols in the output rather than
+# silently dropping them, which makes missing docs visible as empty pages.
+INPUT                  = include src
+RECURSIVE              = YES
+FILE_PATTERNS          = *.h *.c
+OPTIMIZE_OUTPUT_FOR_C  = YES
+EXTRACT_ALL            = YES
+EXTRACT_STATIC         = YES
+JAVADOC_AUTOBRIEF      = YES
+
+# No dot: graphviz is not a dependency of this pipeline.
+HAVE_DOT               = NO
+
+QUIET                  = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES

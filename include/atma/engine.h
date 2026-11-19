@@ -6,7 +6,7 @@
 #define ATMA_ENGINE_H
 
 /*
- * atma — engine umbrella header.
+ * atma - engine umbrella header.
  *
  * Everything under include/atma/ is the platform-agnostic API games are
  * written against. src/core/ holds the engine proper (main loop, input edge
@@ -25,22 +25,22 @@
 /*
  * The knob-set a game hands to atma_run().
  *
- * target_fps  — desired logic+render tick rate in Hz. The engine ticks the
+ * target_fps  - desired logic+render tick rate in Hz. The engine ticks the
  *               game once every (display_hz / target_fps) display
  *               refreshes, rounded to nearest, so rates that don't evenly
  *               divide the backend's refresh rate (see
  *               atma_platform_info) get the closest achievable cadence.
  *               0 means "tick on every refresh".
- * cpu_speed   — requested clock speed; honored where the hardware allows it
+ * cpu_speed   - requested clock speed; honored where the hardware allows it
  *               (ZX Next turbo mode), ignored on platforms that can't. Read
  *               once at startup.
- * init        — runs once, after the platform is up and before the loop.
- * update      — runs once per tick, before render, so render can show what
+ * init        - runs once, after the platform is up and before the loop.
+ * update      - runs once per tick, before render, so render can show what
  *               update computed. Poll input inside update (or rely on the
  *               engine's QUIT check).
- * render      — runs once per tick between atma_gfx_begin_frame() and
+ * render      - runs once per tick between atma_gfx_begin_frame() and
  *               atma_gfx_end_frame().
- * shutdown    — runs once after the loop exits, before the platform goes
+ * shutdown    - runs once after the loop exits, before the platform goes
  *               down. Release resources here, not in atexit-style hooks.
  *
  * Any callback may be NULL to skip it. They take no arguments: read engine
@@ -48,7 +48,7 @@
  * call atma_quit() to end the run.
  *
  * config is read throughout atma_run(), so it must stay valid for the whole
- * run — a local variable in main() is fine, since main() blocks on
+ * run - a local variable in main() is fine, since main() blocks on
  * atma_run() anyway.
  */
 typedef struct {

@@ -1,4 +1,4 @@
-# atma — cross-platform retro engine.
+# atma - cross-platform retro engine.
 #
 # Pick a backend with PLATFORM=<name>. Core (src/core) and game (game) are
 # shared; each backend contributes whatever .c files sit in
@@ -57,7 +57,20 @@ endif
 # ZESARUX at the real binary.
 ZESARUX ?= zesarux
 
-.PHONY: run clean
+# Documentation pipeline. Doxygen reads the C sources and emits XML only;
+# doxybook2 turns that XML into plain Markdown under docs/api; Zensical
+# builds docs/ (handwritten pages plus docs/api) into one site.
+# docs/api is generated, so it is gitignored and rebuilt by `make docs`.
+DOCS_DIR   := docs
+DOCS_API   := $(DOCS_DIR)/api
+DOCS_XML   := build/doxygen/xml
+DOCS_SITE  := build/docs/site
+DOXYFILE   := Doxyfile
+DOXYGEN    ?= doxygen
+DOXYBOOK2  ?= doxybook2
+ZENSICAL   ?= zensical
+
+.PHONY: run clean docs docs-api docs-serve docs-clean
 run: $(TARGET)
 ifeq ($(PLATFORM),host)
 	./$(TARGET)
@@ -68,5 +81,34 @@ else
 	  exit 1; }
 	$(ZESARUX) --noconfigfile --machine TBBlue --snap $(TARGET)
 endif
+docs: docs-api
+	@command -v $(ZENSICAL) >/dev/null 2>&1 || { \
+	  echo "$(ZENSICAL) not found. Install it: pipx install zensical"; \
+	  exit 1; }
+	$(ZENSICAL) build
+
+# Doxygen emits XML only; doxybook2 converts it to Markdown in docs/api.
+# The output dir is wiped first so pages for deleted symbols do not linger.
+docs-api:
+	@command -v $(DOXYGEN) >/dev/null 2>&1 || { \
+	  echo "$(DOXYGEN) not found. Install it: sudo zypper install doxygen"; \
+	  exit 1; }
+	@command -v $(DOXYBOOK2) >/dev/null 2>&1 || { \
+	  echo "$(DOXYBOOK2) not found. Install it from"; \
+	  echo "  https://github.com/matusnovak/doxybook2/releases"; \
+	  exit 1; }
+	$(DOXYGEN) $(DOXYFILE)
+	rm -rf $(DOCS_API)
+	$(DOXYBOOK2) --input $(DOCS_XML) --output $(DOCS_API)
+
+docs-serve: docs-api
+	@command -v $(ZENSICAL) >/dev/null 2>&1 || { \
+	  echo "$(ZENSICAL) not found. Install it: pipx install zensical"; \
+	  exit 1; }
+	$(ZENSICAL) serve
+
+docs-clean:
+	rm -rf $(DOCS_XML) $(DOCS_API) $(DOCS_SITE)
+
 clean:
 	rm -rf build

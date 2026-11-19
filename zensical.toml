@@ -1,0 +1,9 @@
+[project]
+site_name = "atma"
+site_description = "A cross-platform retro engine targeting classic computers and modern PCs."
+docs_dir = "docs"
+site_dir = "build/docs/site"
+
+# No explicit nav: Zensical derives it from the docs/ tree, which is what the
+# generated docs/api pages need. An explicit nav would have to list every
+# doxybook2 output file by name and would break whenever a symbol is added.

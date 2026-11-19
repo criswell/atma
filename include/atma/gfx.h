@@ -78,11 +78,11 @@ int atma_gfx_pattern_set_indexed(u8 pattern, const u8 *pixels);
 
 /*
  * Hardware-sprite seam.
- * slot    — backend sprite index (the Next has 64 hardware sprites).
- * x, y    — position in screen pixels; i16 allows partially off-screen
+ * slot    - backend sprite index (the Next has 64 hardware sprites).
+ * x, y    - position in screen pixels; i16 allows partially off-screen
  *           placements. Backends decide clipping/coordinates off-screen.
- * pattern — which bitmap to show, in the backend's pattern/attribute table.
- * flags   — backend-defined attribute bits (mirror, rotate, layer, ...).
+ * pattern - which bitmap to show, in the backend's pattern/attribute table.
+ * flags   - backend-defined attribute bits (mirror, rotate, layer, ...).
  */
 #define ATMA_SPR_MIRROR_X 0x08
 #define ATMA_SPR_MIRROR_Y 0x04

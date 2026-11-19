@@ -7,7 +7,7 @@
 
 /*
  * Input: a 16-bit bitmask of abstract buttons, identical on every platform.
- * This is the core of the portability story — Kempston joystick, Spectrum
+ * This is the core of the portability story - Kempston joystick, Spectrum
  * keyboard and host keys all collapse into these same bits.
  */
 
@@ -30,15 +30,15 @@
 void atma_input_init(void);
 void atma_input_shutdown(void);
 
-/* Snapshot the backend state. Called exactly once per tick by the engine —
+/* Snapshot the backend state. Called exactly once per tick by the engine -
  * the pressed/released edges below are only valid relative to the last
  * poll, so don't call this from game code. */
 void atma_input_poll(void);
 
 /* State relative to the last poll:
- * down     — held right now
- * pressed  — went down this tick
- * released — came up this tick
+ * down     - held right now
+ * pressed  - went down this tick
+ * released - came up this tick
  * AND with the ATMA_BTN_* masks to test individual buttons. */
 u16 atma_input_down(void);
 u16 atma_input_pressed(void);

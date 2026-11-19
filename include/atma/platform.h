@@ -9,7 +9,7 @@
  * Platform seam. Each backend under src/platform/<name>/ implements these
  * four entry points, plus the *_backend_* hooks declared in input.h, gfx.h
  * and sound.h. The engine (src/core/engine.c) drives all of them in a fixed
- * order; a game never calls any of this directly — it reads info below.
+ * order; a game never calls any of this directly - it reads info below.
  */
 
 #include "types.h"
@@ -51,7 +51,7 @@ void atma_platform_set_cpu_speed(atma_cpu_speed speed);
 
 /*
  * Block until the next display refresh; return how many refreshes elapsed
- * since the last call — normally 1, more if a tick overran, so callers can
+ * since the last call - normally 1, more if a tick overran, so callers can
  * keep game speed honest under load. Typical implementation: HALT until the
  * frame interrupt on interrupt-driven machines, a timed sleep on hosts.
  */

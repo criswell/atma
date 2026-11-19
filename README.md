@@ -17,6 +17,18 @@ retro computers, but which can also build on modern PCs.
 - SDL3 (3.4 or newer, with development headers)
 - Python 3 (to run tools/mkpats.py, the asset generator; standard library only)
 
+## Documentation
+
+- **Doxygen** - `sudo zypper install doxygen`. Parses the C sources and emits
+  XML only; HTML output is disabled because Zensical renders the site.
+- **doxybook2** v1.5.0 - no distro package. Take
+  `doxybook2-linux-amd64-v1.5.0.zip` from
+  github.com/matusnovak/doxybook2/releases, unzip it, and put `bin/doxybook2`
+  on `PATH` (e.g. `sudo install -m755 bin/doxybook2 /usr/local/bin/`).
+  Converts the Doxygen XML into Markdown.
+- **Zensical** - `pipx install zensical` (needs Python 3.11+). Builds the
+  unified site from `docs/`.
+
 ## ZX Spectrum Next (PLATFORM=zxn)
 
 - The **z88dk** toolchain, built from source (distro packages are too old
@@ -86,6 +98,18 @@ editing the source image:
 ```
 python3 tools/mkpats.py demo/atma.png demo/atma_patterns
 ```
+
+# DOCS
+
+```
+make docs        # Doxygen -> XML, doxybook2 -> docs/api, Zensical -> build/docs/site
+make docs-serve  # same, then serve on localhost:8000 with live reload
+make docs-clean  # drop generated XML, Markdown and site output
+```
+
+`docs/` holds handwritten guides; `docs/api/` is generated from the sources by
+doxybook2 and is gitignored, so never edit it by hand. Doxygen reads
+`Doxyfile`, Zensical reads `zensical.toml`.
 
 # DEMO
 

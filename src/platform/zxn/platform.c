@@ -7,7 +7,7 @@
 #include "atma/gfx.h"
 
 /*
- * ZX Spectrum Next backend — platform entry points.
+ * ZX Spectrum Next backend - platform entry points.
  *
  * Frame pacing polls the raster instead of using HALT. Two facts about this
  * target force that: the zxn CRT starts with interrupts disabled
