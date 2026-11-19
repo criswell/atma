@@ -1,6 +1,9 @@
 [project]
 site_name = "atma"
 site_description = "A cross-platform retro engine targeting classic computers and modern PCs."
+# Project pages are served from a subpath, so the full URL with the repo name
+# must be set or links and the sitemap land on the wrong paths.
+site_url = "https://criswell.github.io/atma/"
 docs_dir = "docs"
 site_dir = "build/docs/site"
 
