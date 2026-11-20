@@ -104,6 +104,9 @@ docs-api:
 	  echo "$(DOXYBOOK2) not found. Install it from"; \
 	  echo "  https://github.com/matusnovak/doxybook2/releases"; \
 	  exit 1; }
+	@# Doxygen creates only the leaf of OUTPUT_DIRECTORY + XML_OUTPUT, not the
+	@# parents; a fresh checkout has no build/ so create it ourselves.
+	@mkdir -p $(DOCS_XML)
 	$(DOXYGEN) $(DOXYFILE)
 	rm -rf $(DOCS_API)
 	@mkdir -p $(DOCS_API)
