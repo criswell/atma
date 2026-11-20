@@ -79,13 +79,10 @@ Palette entries are live state: change one and every pixel using that
 index, sprites included, recolors on the next frame, on every platform.
 Palette animation is portable.
 
-Index 0 is the transparent color for sprites on every backend. On the
-Next, sprite transparency is matched by color, not index: the hardware
-compares every sprite-palette entry's top 8 bits against one register
-value, so entry 0's color must be unique among the palette's used entries
-or its 8-bit neighbors turn transparent too. `mkpats.py` handles this by
-giving entry 0 a marker color no real color shares, and the zxn backend
-derives the transparency register from entry 0 whenever it is set.
+Index 0 is the transparent color for sprites on every backend, by index:
+sprite pixels holding value 0 draw transparent and entry 0's RGB is never
+shown, on the host (alpha 0) and on the Next (the sprite transparency
+index register, written 0 by the zxn backend).
 
 ## Assets are compiled in
 

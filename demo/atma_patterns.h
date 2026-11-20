@@ -21,8 +21,8 @@
  *        components.
  *
  * Entry 0 is the transparent color; its RGB is a marker the generator picks
- * so no real color shares its 8-bit form, because the Next matches sprite
- * transparency by color, not index.
+ * to keep the transparent slot visually distinct (nothing matches on it at
+ * run time: transparency is by index).
  */
 extern const unsigned char atma_patterns_palette[ATMA_PATTERNS_PALETTE_N][4];
 

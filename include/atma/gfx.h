@@ -84,20 +84,16 @@ void atma_gfx_hline(u8 y, u8 color);
  * Next's 9-bit RGB333 space (top 3 bits of red, 3 of green, 3 of blue), on
  * every backend: the host is not more capable than the Next, so the window
  * shows byte-for-byte what the hardware shows. Entry 0 is the transparent
- * color for sprites. Set the palette before drawing anything that depends
- * on it (call from the game's init callback).
+ * color for sprites, and transparency is by index: each backend is set up
+ * so index 0 itself draws transparent (alpha 0 on the host; the Next's
+ * sprite transparency index register, written 0 in atma_gfx_init),
+ * leaving entry 0's RGB free for any value. Set the palette before
+ * drawing anything that depends on it (call from the game's init
+ * callback).
  *
  * Entries are live state, not upload-time constants: changing one recolors
  * every drawn pixel that references the index, sprites included, on the
  * next frame, on every platform. Palette animation is therefore portable.
- *
- * \warning Entry 0's color is reserved: the Next matches sprite
- *          transparency by an 8-bit color value rather than by index, so
- *          entry 0's color must be unique among the palette's used entries
- *          (mkpats enforces this by giving entry 0 a marker color no other
- *          entry shares; the zxn backend derives the hardware transparency
- *          register from entry 0 whenever it is set). Backgrounds should
- *          not rely on entry 0 rendering as a visible color.
  *
  * \param index Palette slot, 0..255.
  * \param r Red channel, 8-bit.

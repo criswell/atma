@@ -6,13 +6,14 @@ Usage: python3 tools/mkpats.py <image.png> <output-base>
 Outputs <output-base>.h and <output-base>.c containing:
 
   - the image's palette as {index, r, g, b} rows: entry 0 is the
-    transparent color (source pixels with alpha < 128). Its RGB is a
-    marker chosen so no real color shares its 8-bit RRRGGGBB form,
-    because the ZX Spectrum Next matches sprite transparency by color,
-    not index; every other color is quantized to the Next's 9-bit RGB333
-    space (3 bits red, 3 green, 3 blue; 512 colors) and expanded back to
-    8-bit components, so the numbers are exactly what both the host
-    window and the Next hardware show;
+    transparent color (source pixels with alpha < 128). Transparency is
+    by index on every backend, so entry 0's RGB is never drawn; it is
+    still chosen as a marker (an 8-bit RRRGGGBB form no real color
+    shares) to keep the transparent slot visually distinct in the
+    generated table. Every other color is quantized to the Next's 9-bit
+    RGB333 space (3 bits red, 3 green, 3 blue; 512 colors) and expanded
+    back to 8-bit components, so the numbers are exactly what both the
+    host window and the Next hardware show;
 
   - the image sliced into 16x16 cell patterns (the Next's native sprite
     atom), each cell one byte per pixel holding a palette index from that
@@ -143,9 +144,10 @@ def main():
     w, h, pixels = read_png(png)
 
     # Palette: entry 0 = transparent, then first-seen order after RGB333
-    # quantization. Entry 0 carries a marker color chosen below: the Next
-    # matches sprite transparency by 8-bit color, not index, so entry 0's
-    # color must not share its RRRGGGBB byte with any real color.
+    # quantization. Entry 0 carries a marker color chosen below: nothing
+    # matches on it at run time (transparency is by index), but keeping
+    # it off every real color's RRRGGGBB form makes the transparent slot
+    # visually distinct in the generated table.
     palette = [None]  # entry 0 placeholder; the marker color is chosen below
     index_of = {}
     for r, g, b, alpha in pixels:
@@ -160,7 +162,7 @@ def main():
             palette.append((len(palette), *key))
 
     def byte333(r, g, b):
-        """The 8-bit RRRGGGBB form the Next's transparency match uses."""
+        """A color's 8-bit RRRGGGBB form (the top bits of each channel)."""
         return ((r >> 5) << 5) | ((g >> 5) << 2) | (b >> 6)
 
     used = {byte333(r, g, b) for _i, r, g, b in palette[1:]}
@@ -206,8 +208,8 @@ def main():
 
 /* Palette rows {{index, r, g, b}}: Next RGB333 values expanded to 8-bit
  * components. Entry 0 is the transparent color; its RGB is a marker the
- * generator picks so no real color shares its 8-bit form, because the
- * Next matches sprite transparency by color, not index. */
+ * generator picks to keep the transparent slot visually distinct
+ * (nothing matches on it at run time: transparency is by index). */
 #define {stem.upper()}_PALETTE_N {len(palette)}
 extern const unsigned char {stem}_palette[{stem.upper()}_PALETTE_N][4];
 

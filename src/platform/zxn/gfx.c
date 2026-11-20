@@ -109,9 +109,7 @@ void atma_gfx_init(void)
                   RSLS_SPRITES_VISIBLE | RSLS_SPRITES_OVER_BORDER |
                   RSLS_LAYER_PRIORITY_SLU);
 
-    /* Sprite transparency: boot value until the game's palette arrives.
-     * Entry 0's own color drives this register from then on (see
-     * atma_gfx_palette_set). */
+    /* Sprite transparency: boot value until the game's palette arrives. */
     ZXN_WRITE_REG(REG_SPRITE_TRANSPARENCY_INDEX, 0);
 
     /* Power-on palette: RGB332, the same table the host backend starts from,
@@ -158,19 +156,6 @@ void atma_gfx_palette_set(u8 index, u8 r, u8 g, u8 b)
      * engine exposes one table, so both get the entry. */
     palette_entry(RPC_SELECT_LAYER_2_PALETTE_0, index, r, g, b);
     palette_entry(RPC_SELECT_SPRITES_PALETTE_0, index, r, g, b);
-
-    /* Sprite transparency on the Next is a color match, not an index match:
-     * NextReg 0x4B holds one 8-bit RRRGGGBB value, and every sprite-palette
-     * entry whose top 8 bits equal it draws transparent (so a value always
-     * covers two RGB333 entries). Deriving the register from entry 0's own
-     * color keeps the engine's index-0 rule exact on hardware, provided
-     * entry 0's 8-bit color is unique among the palette's used entries;
-     * mkpats guarantees that when it generates assets. */
-    if (index == 0) {
-        ZXN_WRITE_REG(REG_SPRITE_TRANSPARENCY_INDEX,
-                      (u8)(((r >> 5) << 5) | (((g >> 5) & 7) << 2)
-                           | ((b >> 6) & 3)));
-    }
 }
 
 void atma_gfx_sprite_set(u8 slot, i16 x, i16 y, u8 pattern, u8 flags)
