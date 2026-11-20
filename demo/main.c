@@ -35,7 +35,11 @@
 /** Screen position of the logo's top-left corner. */
 static i16 x = 40, y = 30;
 /** Per-tick velocity, in logical pixels. */
-static i8 dx = 2, dy = 1; /* TODO 60fps PC and 50fps on ZXN, need to scale to make "feel same" */
+#ifdef __ZXNET
+static i8 dx = 3, dy = 2;
+#else
+static i8 dx = 2, dy = 1;
+#endif
 
 static void on_init(void)
 {
