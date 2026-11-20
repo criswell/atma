@@ -26,6 +26,12 @@
  * sample and needs no table, no ISR and no assumption about the memory
  * map.
  *
+ * Refresh policy: whatever the machine is actually doing. The Next's reset
+ * cadence is 50 Hz (NextReg 0x05 bit 2 clear) and this backend neither
+ * forces nor assumes anything else; info.display_hz below reports 50 and
+ * the raster delivers 50. A game wanting a different cadence writes
+ * NextReg 0x05 itself and then knows a fact the engine cannot.
+ *
  * \note The cost is that an overrun is never reported: wait_frame always
  *       returns 1, so the engine's frame divisor still paces the game but
  *       never sees a skipped refresh.
@@ -44,22 +50,30 @@
  */
 #define FRAME_SYNC_LINE 192
 
-static const atma_platform_info info = { "zxn", 60, ATMA_SCREEN_W, ATMA_SCREEN_H };
+/**
+ * \brief What the linked backend advertises.
+ *
+ * display_hz is the video cadence atma_platform_wait_frame actually
+ * delivers, and that is 50 Hz here: 50 is the machine's native refresh and
+ * the reset state of NextReg 0x05 bit 2, and this backend deliberately
+ * leaves that register alone. The register is owned by whoever writes it
+ * (the boot environment, or a game that reprograms it), so claiming a rate
+ * nobody enforced made the engine pace games wrong: with 60 advertised and
+ * the raster really at 50, a target_fps of 60 got divisor 1 and ticked at
+ * the true 50, but a game computing px/second from display_hz ran 17
+ * percent fast. ZEsarUX paces at 50 even with the 60 Hz bit set, verified
+ * by frame-count probe 2026-11-20.
+ */
+static const atma_platform_info info = { "zxn", 50, ATMA_SCREEN_W, ATMA_SCREEN_H };
 
 const atma_platform_info *atma_platform_info_get(void) { return &info; }
 
 void atma_platform_init(void)
 {
-    u8 periph1;
     u8 periph2;
 
-    /* Force the 60 Hz refresh (NextReg 0x05 bit 2) so the engine's pacing
-     * and the game's target_fps agree regardless of HDMI vs VGA timing. */
-    periph1 = ZXN_READ_REG(REG_PERIPHERAL_1);
-    ZXN_WRITE_REG(REG_PERIPHERAL_1, (u8)(periph1 | RP1_RATE_60));
-
-    /* Unlock the turbo register. Without this bit REG_TURBO_MODE writes are
-     * ignored and atma_platform_set_cpu_speed silently does nothing. */
+    /* Turbo unlock. Without this bit REG_TURBO_MODE writes are ignored and
+     * atma_platform_set_cpu_speed silently does nothing. */
     periph2 = ZXN_READ_REG(REG_PERIPHERAL_2);
     ZXN_WRITE_REG(REG_PERIPHERAL_2, (u8)(periph2 | RP2_ENABLE_TURBO));
 }

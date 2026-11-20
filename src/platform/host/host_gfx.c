@@ -107,7 +107,7 @@ static void palette_default(void)
  *        into its texture.
  *
  * Byte 0 stays transparent (alpha 0) regardless of entry 0's RGB: the
- * engine-wide rule, mapped on zxn via the transparency register.
+ * engine-wide rule, mapped on zxn via the transparency index register.
  */
 static void pattern_resolve(u8 pattern)
 {
@@ -237,7 +237,11 @@ void atma_gfx_end_frame(void)
 
 void atma_gfx_clear(u8 color)
 {
-    if (!renderer) return;
+    /* Clear the FRAME TEXTURE, not whatever the render target happens to be:
+     * a call from the game's init callback (before the first begin_frame)
+     * must not paint the window underneath a later-presented texture. */
+    if (!renderer || !screen) return;
+    SDL_SetRenderTarget(renderer, screen);
     SDL_SetRenderDrawColor(renderer, palette[color].r, palette[color].g,
                            palette[color].b, 255);
     SDL_RenderClear(renderer);
@@ -245,7 +249,8 @@ void atma_gfx_clear(u8 color)
 
 void atma_gfx_hline(u8 y, u8 color)
 {
-    if (!renderer) return;
+    if (!renderer || !screen) return;
+    SDL_SetRenderTarget(renderer, screen);
     SDL_SetRenderDrawColor(renderer, palette[color].r, palette[color].g,
                            palette[color].b, 255);
     SDL_RenderLine(renderer, 0, y + 0.5f, atma_platform_info_get()->screen_w, y + 0.5f);

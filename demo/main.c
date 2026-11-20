@@ -34,16 +34,16 @@
 
 /** Screen position of the logo's top-left corner. */
 static i16 x = 40, y = 30;
-/** Per-tick velocity, in logical pixels. */
-#ifdef __ZXNET
-static i8 dx = 6, dy = 3;
-#else
-static i8 dx = 2, dy = 1;
-#endif
+
+/* velocity in px/second; convert to 8.8 fixed point per tick, once */
+#define VY_PX_PER_SEC 60
+#define VX_PX_PER_SEC 30
+static i16 vx_q8, vy_q8;   /* per-tick movement, 8.8 */
 
 static void on_init(void)
 {
     u8 i;
+    u8 cx;
     /* Load the generator's palette rows into the engine table at the same
      * slots the cell bytes use: row i of atma_patterns_palette holds
      * {engine index, r, g, b}, so cell byte N means engine palette slot N. */
@@ -61,28 +61,34 @@ static void on_init(void)
             atma_log("demo: pattern upload failed; logo will not draw");
         }
     }
-}
-
-static void on_update(void)
-{
-    if (atma_input_pressed() & ATMA_BTN_START) atma_quit();
-
-    x += dx;
-    y += dy;
-    if (x <= 0)                      { x = 0;                      dx = -dx; }
-    if (x >= ATMA_SCREEN_W - LOGO_W) { x = ATMA_SCREEN_W - LOGO_W; dx = -dx; }
-    if (y <= 0)                      { y = 0;                      dy = -dy; }
-    if (y >= ATMA_SCREEN_H - LOGO_H) { y = ATMA_SCREEN_H - LOGO_H; dy = -dy; }
-}
-
-static void on_render(void)
-{
-    u8 cx, cy;
 
     /* Gradient: palette index tracks the scanline, blue fading to green. */
     for (cx = 0; cx < ATMA_SCREEN_H; ++cx) {
         atma_gfx_hline(cx, (u8)(1 + cx % 60));
     }
+    u8 hz = atma_platform_info_get()->display_hz;
+    u8 tick_hz = hz < 60 ? hz : 60;          /* effective tick rate */
+    vx_q8 = (i16)(VX_PX_PER_SEC * 256 / tick_hz);
+    vy_q8 = (i16)(VY_PX_PER_SEC * 256 / tick_hz);
+}
+
+static void on_update(void)
+{
+    static i16 fx, fy;                        /* fractional remainders */
+    if (atma_input_pressed() & ATMA_BTN_START) atma_quit();
+
+    fx += vx_q8;  fy += vy_q8;
+    x = (i16)(x + (fx >> 8));  fx &= 0xFF;
+    y = (i16)(y + (fy >> 8));  fy &= 0xFF;
+    if (x <= 0)                      { x = 0;                      vx_q8 = -vx_q8; }
+    if (x >= ATMA_SCREEN_W - LOGO_W) { x = ATMA_SCREEN_W - LOGO_W; vx_q8 = -vx_q8; }
+    if (y <= 0)                      { y = 0;                      vy_q8 = -vy_q8; }
+    if (y >= ATMA_SCREEN_H - LOGO_H) { y = ATMA_SCREEN_H - LOGO_H; vy_q8 = -vy_q8; }
+}
+
+static void on_render(void)
+{
+    u8 cx, cy;
 
     for (cy = 0; cy < LOGO_CELLS_Y; ++cy) {
         for (cx = 0; cx < LOGO_CELLS_X; ++cx) {
