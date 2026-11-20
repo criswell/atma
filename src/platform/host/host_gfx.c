@@ -28,6 +28,14 @@
  * the logical pixel grid just like Next hardware, instead of gliding over
  * sub-pixel window positions.
  *
+ * The background is a byte-per-pixel Layer 2 model, not a draw list: clear
+ * and hline write palette indices into l2_vram, and end_frame resolves the
+ * bytes against the live palette into a texture composited under the
+ * sprites. That matches the Next, where Layer 2 is persistent memory the
+ * display reads every scanline: background drawn once in on_init survives
+ * every frame, and mid-run palette edits recolor it. Drawing into l2_vram
+ * works from anywhere, including before the first begin_frame.
+ *
  * Palette discipline: the host is not more capable than the Next. Colors
  * are quantized to the Next's 9-bit RGB333 (see palette_quantize below), so
  * the window shows byte-for-byte what the hardware will. Pattern uploads
@@ -51,11 +59,15 @@ typedef struct {
 static SDL_Window *window;
 static SDL_Renderer *renderer;
 static SDL_Texture *screen;
+/** Byte-per-pixel Layer 2 model: indices, resolved to l2_tex at scanout. */
+static u8 l2_vram[ATMA_SCREEN_W * ATMA_SCREEN_H];
+static SDL_Texture *l2_tex;
 static SDL_Texture *patterns[ATMA_MAX_PATTERNS];
 static u16 pattern_w[ATMA_MAX_PATTERNS];
 static u16 pattern_h[ATMA_MAX_PATTERNS];
 static sprite_state sprites[ATMA_MAX_SPRITES];
 static SDL_Color palette[256];
+static u8 l2_dirty;
 
 /**
  * \brief Raw indexed bytes of every uploaded pattern, kept so the palette
@@ -125,6 +137,32 @@ static void pattern_resolve(u8 pattern)
 }
 
 /**
+ * \brief Resolve the Layer 2 model's bytes against the live palette into
+ *        its texture.
+ *
+ * Runs when the palette changed or the VRAM was written this frame; one
+ * 256x192 pass per scanout at most, like the Next resolving Layer 2 during
+ * display fetch. Every byte is opaque: Layer 2 has no transparency, that
+ * belongs to the sprite layer above it.
+ */
+static void l2_resolve(void)
+{
+    u8 rgba[ATMA_SCREEN_W * ATMA_SCREEN_H * 4];
+    int i;
+    const int n = ATMA_SCREEN_W * ATMA_SCREEN_H;
+
+    for (i = 0; i < n; ++i) {
+        const SDL_Color *c = &palette[l2_vram[i]];
+        rgba[i * 4 + 0] = c->r;
+        rgba[i * 4 + 1] = c->g;
+        rgba[i * 4 + 2] = c->b;
+        rgba[i * 4 + 3] = 255;
+    }
+    SDL_UpdateTexture(l2_tex, NULL, rgba, ATMA_SCREEN_W * 4);
+    l2_dirty = 0;
+}
+
+/**
  * \brief Push palette changes into every live pattern texture.
  *
  * Called once per frame at most; a palette edit between frames costs one
@@ -139,6 +177,7 @@ static void palette_flush(void)
         if (pattern_live[p]) pattern_resolve(p);
     }
     palette_dirty = 0;
+    l2_dirty = 1;
 }
 
 void atma_gfx_init(void)
@@ -168,6 +207,14 @@ void atma_gfx_init(void)
         return;
     }
     SDL_SetTextureScaleMode(screen, SDL_SCALEMODE_NEAREST);
+    l2_tex = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGBA32,
+                               SDL_TEXTUREACCESS_STREAMING,
+                               pi->screen_w, pi->screen_h);
+    if (!l2_tex) {
+        SDL_Log("atma: could not create Layer 2 texture: %s", SDL_GetError());
+        return;
+    }
+    SDL_SetTextureScaleMode(l2_tex, SDL_SCALEMODE_NEAREST);
     SDL_SetRenderLogicalPresentation(renderer, pi->screen_w, pi->screen_h,
                                      SDL_LOGICAL_PRESENTATION_INTEGER_SCALE);
     SDL_SetRenderVSync(renderer, 1);
@@ -183,6 +230,8 @@ void atma_gfx_shutdown(void)
     memset(pattern_live, 0, sizeof pattern_live);
     if (screen) SDL_DestroyTexture(screen);
     screen = NULL;
+    if (l2_tex) SDL_DestroyTexture(l2_tex);
+    l2_tex = NULL;
     if (renderer) SDL_DestroyRenderer(renderer);
     if (window) SDL_DestroyWindow(window);
     renderer = NULL;
@@ -209,6 +258,14 @@ void atma_gfx_end_frame(void)
     /* Palette edits take effect on the frame that draws with them, like
      * the Next resolving indices at render time. */
     palette_flush();
+
+    /* Layer 2 scanout: composite the background under the sprites. The
+     * background persists in l2_vram across frames, so whatever the game
+     * painted last (whenever it painted it) is what shows here; sprites
+     * with byte 0 transparent let it through, the rest cover it. */
+    if (l2_dirty) l2_resolve();
+    SDL_SetTextureBlendMode(l2_tex, SDL_BLENDMODE_NONE);
+    SDL_RenderTexture(renderer, l2_tex, NULL, NULL);
 
     for (i = 0; i < ATMA_MAX_SPRITES; ++i) {
         const sprite_state *s = &sprites[i];
@@ -237,23 +294,19 @@ void atma_gfx_end_frame(void)
 
 void atma_gfx_clear(u8 color)
 {
-    /* Clear the FRAME TEXTURE, not whatever the render target happens to be:
+    /* Fill the Layer 2 model, not whatever the render target happens to be:
      * a call from the game's init callback (before the first begin_frame)
-     * must not paint the window underneath a later-presented texture. */
-    if (!renderer || !screen) return;
-    SDL_SetRenderTarget(renderer, screen);
-    SDL_SetRenderDrawColor(renderer, palette[color].r, palette[color].g,
-                           palette[color].b, 255);
-    SDL_RenderClear(renderer);
+     * must land in VRAM the display reads, like a Next Layer 2 fill. */
+    if (!l2_tex) return;
+    memset(l2_vram, color, sizeof l2_vram);
+    l2_dirty = 1;
 }
 
 void atma_gfx_hline(u8 y, u8 color)
 {
-    if (!renderer || !screen) return;
-    SDL_SetRenderTarget(renderer, screen);
-    SDL_SetRenderDrawColor(renderer, palette[color].r, palette[color].g,
-                           palette[color].b, 255);
-    SDL_RenderLine(renderer, 0, y + 0.5f, atma_platform_info_get()->screen_w, y + 0.5f);
+    if (!l2_tex || y >= ATMA_SCREEN_H) return;
+    memset(&l2_vram[y * ATMA_SCREEN_W], color, ATMA_SCREEN_W);
+    l2_dirty = 1;
 }
 
 void atma_gfx_sprite_set(u8 slot, i16 x, i16 y, u8 pattern, u8 flags)

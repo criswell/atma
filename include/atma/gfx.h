@@ -62,6 +62,11 @@ void atma_gfx_end_frame(void);
 
 /**
  * \brief Fill the screen with a palette index.
+ *
+ * Writes the background layer, wherever the call comes from: on every
+ * backend this is persistent memory the display keeps reading, so a fill
+ * in the init callback survives all frames until overdrawn.
+ *
  * \param color Palette index to fill with.
  */
 void atma_gfx_clear(u8 color);
@@ -69,7 +74,8 @@ void atma_gfx_clear(u8 color);
 /**
  * \brief Fill one full-width scanline with a palette index.
  *
- * Cheap on every target; enough for gradients and raster bars.
+ * Cheap on every target; enough for gradients and raster bars. Like
+ * atma_gfx_clear, writes persistent background memory.
  *
  * \param y Scanline, 0..screen_h-1.
  * \param color Palette index to fill with.
