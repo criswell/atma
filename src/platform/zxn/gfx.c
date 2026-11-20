@@ -43,10 +43,15 @@
 /**
  * \brief First Layer 2 bank.
  *
- * 256x192 8bpp Layer 2 lives in 16K banks 8, 9 and 10 (48K total): NextReg
- * 0x12 (Layer 2 RAM page) resets to 8, and the shadow Layer 2 (NextReg 0x13)
- * resets to 11, so 8/9/10 is the only main-vs-shadow split the boot state
- * permits. Bank 11 is the shadow's first strip, not the screen's last.
+ * 256x192 8bpp Layer 2 lives in 16K banks 8, 9 and 10 (48K total). This is
+ * the power-on state (NextReg 0x12 resets to 8, shadow NextReg 0x13 to 11),
+ * but it is NOT inherited at run time: the .nex loader re-pages Layer 2
+ * before the program runs (official nexload.asm and ZEsarUX's loader both
+ * write NextReg 0x12 = 9, shadow = 12). atma_gfx_init therefore writes the
+ * register itself, so the display always reads the banks the engine writes.
+ * With banks 8/9/10 selected and the loader's 9/10/11 in force, the picture
+ * shows the frame scrolled one full bank (64 rows) up and the bottom third
+ * reads unwritten RAM; verified byte-level in ZEsarUX 2026-11-20.
  */
 #define L2_BANK_FIRST 8
 #define L2_PAGE_BYTES 8192 /**< Bytes per MMU page. */
@@ -89,6 +94,12 @@ static void palette_entry(u8 control, u8 index, u8 r, u8 g, u8 b)
 void atma_gfx_init(void)
 {
     u16 i;
+
+    /* Own the Layer 2 banking. The .nex loader leaves NextReg 0x12 = 9
+     * (Layer 2 on banks 9/10/11, per the official nexload reset sequence),
+     * but this engine pages Layer 2 as banks 8/9/10. Write the register
+     * so the display reads the banks l2_map()/atma_gfx_clear() write. */
+    ZXN_WRITE_REG(REG_LAYER_2_RAM_PAGE, L2_BANK_FIRST);
 
     /* 256x192 8bpp Layer 2, enabled, drawn over the ULA. */
     ZXN_WRITE_REG(ZXN_REG_LAYER2_CONTROL, L2_ENABLE);

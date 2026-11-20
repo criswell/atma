@@ -36,7 +36,7 @@
 static i16 x = 40, y = 30;
 /** Per-tick velocity, in logical pixels. */
 #ifdef __ZXNET
-static i8 dx = 3, dy = 2;
+static i8 dx = 6, dy = 3;
 #else
 static i8 dx = 2, dy = 1;
 #endif
