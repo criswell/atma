@@ -86,7 +86,7 @@ else
 	  echo "ZEsarUX not found as '$(ZESARUX)'. Install it, or point at the binary:"; \
 	  echo "  make PLATFORM=zxn GAME_DIR=demo run ZESARUX=/path/to/zesarux"; \
 	  exit 1; }
-	$(ZESARUX) --noconfigfile --machine TBBlue --snap $(TARGET)
+	$(ZESARUX) --noconfigfile --machine TBBlue --tbblue-fast-boot-mode --allowturbotbbluerom --snap $(TARGET)
 endif
 docs: docs-api
 	@command -v $(ZENSICAL) >/dev/null 2>&1 || { \
