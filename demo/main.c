@@ -48,10 +48,12 @@ static void on_init(void)
      * slots the cell bytes use: row i of atma_patterns_palette holds
      * {engine index, r, g, b}, so cell byte N means engine palette slot N. */
     for (i = 0; i < ATMA_PATTERNS_PALETTE_N; ++i) {
-        atma_gfx_palette_set(atma_patterns_palette[i][0],
-                             atma_patterns_palette[i][1],
-                             atma_patterns_palette[i][2],
-                             atma_patterns_palette[i][3]);
+        atma_gfx_palette_set(
+            atma_patterns_palette[i][0],
+            atma_patterns_palette[i][1],
+            atma_patterns_palette[i][2],
+            atma_patterns_palette[i][3]
+        );
     }
 
     /* Upload each generated cell as its own engine pattern. Cells already

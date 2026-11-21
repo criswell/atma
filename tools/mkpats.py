@@ -18,7 +18,12 @@ Outputs <output-base>.h and <output-base>.c containing:
   - the image sliced into 16x16 cell patterns (the Next's native sprite
     atom), each cell one byte per pixel holding a palette index from that
     table. Cells are stored row-major; cells overlapping the right/bottom
-    edges are padded with index 0 (transparent).
+    edges are padded with index 0 (transparent);
+
+  - C identifiers derived from the output base's file name: every
+    character an identifier cannot hold (dash, space, dot, a leading
+    digit, ...) becomes an underscore, so `fire-column` keeps its dash
+    on disk while the generated code says fire_column.
 
 Byte value N in a cell means "palette table row N". A game uploads the
 table with atma_gfx_palette_set() at the same engine slots, so cell bytes
@@ -29,6 +34,8 @@ backend. Requires Python 3 only (hand-rolled PNG decoder, no imports
 beyond stdlib).
 """
 
+import os
+import re
 import struct
 import sys
 import zlib
@@ -193,8 +200,14 @@ def main():
                                               if pa >= 128 else 0)
             cells.append(cell)
 
-    stem = out_base.rsplit("/", 1)[-1]
-    guard = stem.upper() + "_H"
+    stem = os.path.basename(out_base)
+    # C identifiers: letters, digits, underscore, not starting with a
+    # digit. Anything else in the file name (dash, space, dot) becomes
+    # an underscore, and a leading digit gets a second one.
+    ident = re.sub(r"\W", "_", stem)
+    if ident[0].isdigit():
+        ident = "_" + ident
+    guard = ident.upper() + "_H"
 
     h_path = out_base + ".h"
     c_path = out_base + ".c"
@@ -210,16 +223,16 @@ def main():
  * components. Entry 0 is the transparent color; its RGB is a marker the
  * generator picks to keep the transparent slot visually distinct
  * (nothing matches on it at run time: transparency is by index). */
-#define {stem.upper()}_PALETTE_N {len(palette)}
-extern const unsigned char {stem}_palette[{stem.upper()}_PALETTE_N][4];
+#define {ident.upper()}_PALETTE_N {len(palette)}
+extern const unsigned char {ident}_palette[{ident.upper()}_PALETTE_N][4];
 
 /* The image as {len(cells)} cell(s) of {CELL}x{CELL} palette indexes
  * ({cols} column(s) x {rows_n} row(s), row-major), padded with index 0
  * where the image doesn't fill a cell. */
-#define {stem.upper()}_CELLS {len(cells)}
-#define {stem.upper()}_COLS {cols}
-#define {stem.upper()}_ROWS {rows_n}
-extern const unsigned char {stem}_cells[{stem.upper()}_CELLS][{CELL} * {CELL}];
+#define {ident.upper()}_CELLS {len(cells)}
+#define {ident.upper()}_COLS {cols}
+#define {ident.upper()}_ROWS {rows_n}
+extern const unsigned char {ident}_cells[{ident.upper()}_CELLS][{CELL} * {CELL}];
 
 #endif
 """)
@@ -229,12 +242,12 @@ extern const unsigned char {stem}_cells[{stem.upper()}_CELLS][{CELL} * {CELL}];
 
 #include "{stem}.h"
 
-const unsigned char {stem}_palette[{stem.upper()}_PALETTE_N][4] = {{
+const unsigned char {ident}_palette[{ident.upper()}_PALETTE_N][4] = {{
 """)
         for idx, r, g, b in palette:
             f.write(f"    {{ {idx}, {r}, {g}, {b} }},\n")
         f.write("};\n\n")
-        f.write(f"const unsigned char {stem}_cells[{stem.upper()}_CELLS]"
+        f.write(f"const unsigned char {ident}_cells[{ident.upper()}_CELLS]"
                 f"[{CELL} * {CELL}] = {{\n")
         for cell in cells:
             f.write("    {\n")
