@@ -1,4 +1,6 @@
-# atma
+<p align="center">
+  <img src="docs/atma.png" alt="atma" />
+</p>
 
 # WHAT
 
