@@ -4,8 +4,8 @@
 
 # WHAT
 
-`atma` is _intended_ to be a cross-platform game engine that targets classic
-retro computers, but which can also build on modern PCs.
+A cross-platform retro engine targeting classic computers, which also builds
+on modern PCs.
 
 (TODO)
 
