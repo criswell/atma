@@ -16,9 +16,10 @@ which is an idealized retro computer made in the modern age. It aims for feature
 parity to what the ZX Spectrum Next offers:
 
 * Maximum Resolution of *256x192* pixels
-* 9-bit RGB333 color space (top 3 bits of red, green, and blue)
+* 9-bit RGB333 color space (top 3 bits of red, green, and blue): 512 possible colors
     * 256 possible palettes
     * Palettes are live state: changing a palette recolors every drawn pixel that references it
+    * Palettes have a max of 256 colors from the 9-bit color space
 * Up to 128 sprites on screen
     * Sprites are 16x16 pixels
     * Scrolling and layer priorities
