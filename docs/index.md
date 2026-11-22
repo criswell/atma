@@ -1,4 +1,12 @@
-# atma
+---
+title: atma documentation
+---
+
+<figure markdown="span">
+
+![atma](https://criswell.github.io/atma.png){ width="70%" }
+
+</figure>
 
 A cross-platform retro engine targeting classic computers, which also builds
 on modern PCs.

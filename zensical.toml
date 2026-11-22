@@ -7,6 +7,7 @@ site_url = "https://criswell.github.io/atma/"
 docs_dir = "docs"
 site_dir = "build/docs/site"
 
-# No explicit nav: Zensical derives it from the docs/ tree, which is what the
-# generated docs/api pages need. An explicit nav would have to list every
-# doxybook2 output file by name and would break whenever a symbol is added.
+[project.markdown_extensions]
+attr_list = {}
+md_in_html = {}
+pymdownx.blocks.caption = {}
