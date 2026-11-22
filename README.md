@@ -21,6 +21,10 @@ on modern PCs.
 
 ## Documentation
 
+This project mixes handwritten guides with API reference generated from the C
+sources. The API pages under **API** are produced by Doxygen and doxybook2 and
+are rebuilt by `make docs`; do not edit them by hand.
+
 - **Doxygen** - `sudo zypper install doxygen`. Parses the C sources and emits
   XML only; HTML output is disabled because Zensical renders the site.
 - **doxybook2** v1.5.0 - no distro package. Take
@@ -30,6 +34,14 @@ on modern PCs.
   Converts the Doxygen XML into Markdown.
 - **Zensical** - `pipx install zensical` (needs Python 3.11+). Builds the
   unified site from `docs/`.
+
+### Building the docs
+
+```
+make docs        # regenerate docs/api, then build the site into build/docs/site
+make docs-serve  # regenerate docs/api, then serve with live reload
+make docs-clean  # remove generated XML, Markdown and site output
+```
 
 ## ZX Spectrum Next (PLATFORM=zxn)
 
