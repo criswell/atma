@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/atma.png" alt="atma" />
+  <img src="docs/atma.png" alt="atma" width="70%" />
 </p>
 
 # WHAT
