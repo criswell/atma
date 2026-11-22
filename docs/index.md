@@ -4,7 +4,7 @@ title: atma documentation
 
 <figure markdown="span">
 
-![atma](https://criswell.github.io/atma.png){ width="70%" }
+![atma](atma.png){ width="70%" }
 
 </figure>
 
