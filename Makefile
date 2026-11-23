@@ -6,14 +6,21 @@
 # to the build. host builds natively with gcc; zxn needs the z88dk toolchain.
 
 # GAME_DIR picks the program to build (default game; try GAME_DIR=demo).
+# GAME_NAME names the built artifact (default: GAME_DIR's basename, so
+# GAME_DIR=../atma-scratch/fire_palette yields fire_palette.nex). Override
+# it when the directory name is wrong for the SD card or for distribution,
+# e.g. make GAME_DIR=demo/dvd GAME_NAME=dvdroll. NextZXOS reads long file
+# names up to 255 chars, but esxDOS-era dot commands and the 8.3 scene
+# tradition do not.
 PLATFORM ?= host
 GAME_DIR ?= game
+GAME_NAME ?= $(notdir $(patsubst %/,%,$(GAME_DIR)))
 
 # Typo guards. make silently ignores unknown variables, so a misspelled
 # GAME_* assignment quietly builds the default program instead
 # (GAME_IDIR=demo once built `game` and looked like a black-screen bug).
 # Catch both a misspelled GAME_* variable and a GAME_DIR with no sources.
-UNKNOWN_GAME_VARS := $(filter-out GAME_DIR,$(filter GAME_%,$(.VARIABLES)))
+UNKNOWN_GAME_VARS := $(filter-out GAME_DIR GAME_NAME,$(filter GAME_%,$(.VARIABLES)))
 ifneq ($(UNKNOWN_GAME_VARS),)
 $(error Unknown variable: $(UNKNOWN_GAME_VARS). make ignores unknown variables. Did you mean GAME_DIR? GAME_DIR is currently '$(GAME_DIR)')
 endif
@@ -32,7 +39,7 @@ ifeq ($(PLATFORM),host)
 CC      := gcc
 CFLAGS  := -std=c99 -Wall -Wextra -Iinclude -DATMA_PLATFORM_HOST $(shell pkg-config --cflags sdl3)
 LIBS    := $(shell pkg-config --libs sdl3)
-TARGET  := $(BUILD)/atma
+TARGET  := $(BUILD)/$(GAME_NAME)
 $(TARGET): $(SRCS)
 	@mkdir -p $(BUILD)
 	$(CC) $(CFLAGS) $^ $(LIBS) -o $@
@@ -43,10 +50,10 @@ else ifeq ($(PLATFORM),zxn)
 # library is vt_sound, when the sound backend stops being a stub.
 CC      := zcc
 CFLAGS  := +zxn -vn -SO3 --opt-code-size -clib=sdcc_iy -Iinclude
-TARGET  := $(BUILD)/atma.nex
+TARGET  := $(BUILD)/$(GAME_NAME).nex
 $(TARGET): $(SRCS)
 	@mkdir -p $(BUILD)
-	$(CC) $(CFLAGS) $^ -startup=31 -create-app -subtype=nex -o $(BUILD)/atma
+	$(CC) $(CFLAGS) $^ -startup=31 -create-app -subtype=nex -o $(BUILD)/$(GAME_NAME)
 endif
 
 # ZEsarUX (native Linux Next emulator) used by `make PLATFORM=zxn run`.
