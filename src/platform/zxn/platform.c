@@ -26,11 +26,12 @@
  * sample and needs no table, no ISR and no assumption about the memory
  * map.
  *
- * Refresh policy: whatever the machine is actually doing. The Next's reset
- * cadence is 50 Hz (NextReg 0x05 bit 2 clear) and this backend neither
- * forces nor assumes anything else; info.display_hz below reports 50 and
- * the raster delivers 50. A game wanting a different cadence writes
- * NextReg 0x05 itself and then knows a fact the engine cannot.
+ * Refresh policy: whatever the machine is actually doing. Init reads the
+ * machine's 50/60 Hz mode (NextReg 0x05 bit 2) into info.display_hz, so
+ * the engine paces to the cadence the hardware delivers, whichever rate
+ * the boot environment chose. This backend never writes that bit: the
+ * register stays owned by whoever set it (the boot environment, or a
+ * game that reprograms it after init).
  *
  * \note The cost is that an overrun is never reported: wait_frame always
  *       returns 1, so the engine's frame divisor still paces the game but
@@ -53,29 +54,40 @@
 /**
  * \brief What the linked backend advertises.
  *
- * display_hz is the video cadence atma_platform_wait_frame actually
- * delivers, and that is 50 Hz here: 50 is the machine's native refresh and
- * the reset state of NextReg 0x05 bit 2, and this backend deliberately
- * leaves that register alone. The register is owned by whoever writes it
- * (the boot environment, or a game that reprograms it), so claiming a rate
- * nobody enforced made the engine pace games wrong: with 60 advertised and
- * the raster really at 50, a target_fps of 60 got divisor 1 and ticked at
- * the true 50, but a game computing px/second from display_hz ran 17
- * percent fast. ZEsarUX paces at 50 even with the 60 Hz bit set, verified
- * by frame-count probe 2026-11-20.
+ * display_hz starts at 50, the Next's reset cadence, and
+ * atma_platform_init() rewrites it from NextReg 0x05 bit 2 to whatever
+ * the machine actually runs. The fill happens before atma_run() hands
+ * control to the game's init callback, so game code never sees the
+ * placeholder. A game that reprograms the register mid-run still knows
+ * a fact the engine cannot (unchanged policy; see the refresh note
+ * above).
+ *
+ * ZEsarUX caveat: it paces at 50 guest Hz even when this register's 60 Hz
+ * bit is set (verified by frame-count probe 2026-11-20). On the emulator
+ * the divisor math can then assume 60 while the raster delivers 50: the
+ * same 17 percent skew, reversed. Real hardware reads true.
  */
-static const atma_platform_info info = { "zxn", 50, ATMA_SCREEN_W, ATMA_SCREEN_H };
+static atma_platform_info info = { "zxn", 50, ATMA_SCREEN_W, ATMA_SCREEN_H };
 
 const atma_platform_info *atma_platform_info_get(void) { return &info; }
 
 void atma_platform_init(void)
 {
     u8 periph2;
+    u8 periph1;
 
     /* Turbo unlock. Without this bit REG_TURBO_MODE writes are ignored and
      * atma_platform_set_cpu_speed silently does nothing. */
     periph2 = ZXN_READ_REG(REG_PERIPHERAL_2);
     ZXN_WRITE_REG(REG_PERIPHERAL_2, (u8)(periph2 | RP2_ENABLE_TURBO));
+
+    /* True refresh: the machine's 50/60 Hz selection is Peripheral 1 bit 2
+     * (0 = 50 Hz, 1 = 60 Hz). Read it at init so display_hz reports the
+     * rate the raster will actually deliver; the engine's divisor math and
+     * any game tempo math key off this. Never written: the boot
+     * environment owns the display mode. */
+    periph1 = ZXN_READ_REG(REG_PERIPHERAL_1);
+    info.display_hz = (u8)((periph1 & 0x04) ? 60 : 50);
 }
 
 void atma_platform_shutdown(void) {}
