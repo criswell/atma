@@ -4,8 +4,9 @@
 
 /**
  * \file gfx.h
- * \brief Graphics seam: screen clear, scanlines, palette and hardware
- *        sprites.
+ * \brief Graphics seam: screen clear, scanlines, palette, hardware
+ *        sprites, background pixel/blit and the text renderer's font
+ *        format.
  */
 
 #ifndef ATMA_GFX_H
@@ -13,11 +14,15 @@
 
 /**
  * \defgroup gfx Graphics
- * \brief Background fills, the shared palette and hardware sprites.
+ * \brief Background fills, pixel/blit writes, the shared palette,
+ *        hardware sprites and text.
  *
- * Deliberately minimal: one background clear plus hardware sprites, which
- * every target machine (and Layer 2 on the Next) can do. Richer primitives
- * belong in game code or a helper layer on top.
+ * Deliberately minimal: background fills, two background write
+ * primitives (pixel, blit) and hardware sprites, which every target
+ * machine (and Layer 2 on the Next) can do. Richer primitives belong in
+ * game code or a helper layer on top; the text renderer (src/core/text.c)
+ * is the first such helper, built on the blit, with its font format
+ * defined below.
  * @{
  */
 
@@ -34,6 +39,51 @@
 #define ATMA_SCREEN_W 256
 #define ATMA_SCREEN_H 192
 /** @} */
+
+/**
+ * \name Font format limits
+ * \brief Bounds of the engine's font format, not of the engine.
+ *
+ * The atma_font cell can be at most 8 pixels wide (one packed byte per
+ * row, bit 7 leftmost) and 16 rows tall. These caps exist to size the
+ * text renderer's glyph buffer; anything larger should be an art asset,
+ * not text. The renderer bounds every loop with the font's own w and h,
+ * so fonts smaller than the caps use only the buffer they need.
+ * @{
+ */
+#define ATMA_FONT_W_MAX 8
+#define ATMA_FONT_H_MAX 16
+/** @} */
+
+/**
+ * \brief Pixel font type definition
+ *
+ * A font in the engine's text format, provided as game data (the engine
+ * ships none; font8x8, converted by tools/font8x8_convert.py, is the
+ * demo's font). The format:
+ *
+ * - glyph data is one packed byte per row, bit 7 = leftmost pixel,
+ *   bit 0 = rightmost; set bit = ink pixel, clear bit = background
+ *   shows through;
+ * - one glyph occupies h row-bytes, glyphs laid out glyph-major
+ *   (consecutive rows of one glyph together, then the next glyph), so
+ *   glyph G's first row is glyphs[(G - first) * h];
+ * - w is the used width, 1..8: a 6-wide font uses the leftmost 6 bits
+ *   of each row byte and advances the pen 6 pixels per character.
+ *
+ * \param glyphs count * h row bytes, glyph-major, MSB-left.
+ * \param first Char code of glyphs[0] (usually 32, space).
+ * \param count Number of glyphs (95 covers printable ASCII).
+ * \param w Cell width in pixels, 1..ATMA_FONT_W_MAX; also the pen advance.
+ * \param h Cell height in rows, 1..ATMA_FONT_H_MAX.
+ */
+typedef struct {
+    const u8 *glyphs;   /**< count * h row bytes, glyph-major, MSB-left */
+    u8 first;           /**< Char code of glyphs[0] (usually 32, space). */
+    u8 count;           /**< Glyph count; 95 covers printable ASCII. */
+    u8 w;               /**< Cell width in pixels, 1..ATMA_FONT_W_MAX. */
+    u8 h;               /**< Cell height in rows, 1..ATMA_FONT_H_MAX. */
+} atma_font;
 
 /** \brief Core-side graphics init, driven by the engine. */
 void atma_gfx_init(void);
@@ -173,6 +223,49 @@ void atma_gfx_sprite_set(u8 slot, i16 x, i16 y, u8 pattern, u8 flags);
  * \param slot Backend sprite index.
  */
 void atma_gfx_sprite_hide(u8 slot);
+
+/** \brief Set one background pixel to a palette index.
+ *
+ *  Writes persistent background memory, like clear/hline. Coordinates
+ *  off-screen are clipped silently (the sprite_set guard convention).
+ */
+void atma_gfx_pixel(i16 x, i16 y, u8 color);
+
+/** \brief Write a rectangle of palette indices into the background.
+ *
+ *  \param pixels Row-major indices, w*h entries. Index 0 means "skip":
+ *         the background pixel is left untouched, the same transparency
+ *         convention sprites use (gfx.h:92-96). Any other index overwrites.
+ *  \param w, h  Rectangle size, up to 255 each; compose a full-width
+ *         fill from hline.
+ *  Rectangles are clipped to the screen; a wholly off-screen blit draws
+ *  nothing.
+ */
+void atma_gfx_blit(i16 x, i16 y, u8 w, u8 h, const u8 *pixels);
+
+/** \brief Draw one line of text in the engine font format.
+ *
+ *  Ink-only: glyph pixels are written, background pixels are skipped,
+ *  so text sits on whatever the background already shows. Characters
+ *  outside the font's first..first+count range advance the pen without
+ *  drawing. No newline handling: one call, one line, caller loops.
+ *
+ *  Text writes persistent background memory: draw once from init for a
+ *  fixed label, or from render() for a changing score. Redrawing over
+ *  old text without erasing leaves ghost pixels; erase first with
+ *  hline() rows of the background index (blit itself can never write
+ *  index 0: 0 always means skip).
+ *
+ *  The font is passed explicitly on every call, so any number of fonts
+ *  coexist; each renders through its own w and h. Monospace by
+ *  construction: every character advances the pen one cell width.
+ *
+ *  \param font Font to draw with (format and limits above).
+ *  \param x, y Screen position of the first glyph's top-left pixel.
+ *  \param s NUL-terminated string; draw stops at the NUL.
+ *  \param ink Palette index drawn for set bits.
+ */
+void atma_gfx_text(const atma_font *font, i16 x, i16 y, const char *s, u8 ink);
 
 /** @} */
 
