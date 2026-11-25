@@ -99,7 +99,7 @@ static void on_update(void)
             (u8)(i + RING_PAL_BASE),
             v, v, v
         );
-    } 
+    }
 }
 
 static void on_render(void)

@@ -142,6 +142,32 @@ void atma_gfx_clear(u8 color)
     }
 }
 
+void atma_gfx_pixel(i16 x, i16 y, u8 color)
+{
+    u16 offset;
+
+    /* Clip before converting to unsigned: negative coordinates must not
+     * wrap around into Layer 2 memory. */
+    if (x < 0 || x >= ATMA_SCREEN_W ||
+        y < 0 || y >= ATMA_SCREEN_H) {
+        return;
+    }
+
+    /* Layer 2 is 256 pixels wide, so each row starts 256 bytes after
+     * the previous one. */
+    offset = (u16)((u16)y * ATMA_SCREEN_W + (u16)x);
+
+    /* Map the 8K Layer 2 page containing this pixel into the CPU window,
+     * then write at its offset within that page. */
+    l2_map(offset);
+    L2_WINDOW[offset & (L2_PAGE_BYTES - 1)] = color;
+}
+
+void atma_gfx_blit(i16 x, i16 y, u8 w, u8 h, const u8 *pixels)
+{
+    return;
+}
+
 void atma_gfx_hline(u8 y, u8 color)
 {
     u16 offset = (u16)((u16)y << 8);
