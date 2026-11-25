@@ -302,11 +302,23 @@ void atma_gfx_clear(u8 color)
     l2_dirty = 1;
 }
 
+void atma_gfx_pixel(i16 x, i16 y, u8 color)
+{
+    if (!l2_tex || y >= ATMA_SCREEN_H || x >= ATMA_SCREEN_W) return;
+    memset(&l2_vram[y * ATMA_SCREEN_W + x], color, 1);
+    l2_dirty = 1;
+}
+
 void atma_gfx_hline(u8 y, u8 color)
 {
     if (!l2_tex || y >= ATMA_SCREEN_H) return;
     memset(&l2_vram[y * ATMA_SCREEN_W], color, ATMA_SCREEN_W);
     l2_dirty = 1;
+}
+
+void atma_gfx_blit(i16 x, i16 y, u8 w, u8 h, const u8 *pixels)
+{
+    return;
 }
 
 void atma_gfx_sprite_set(u8 slot, i16 x, i16 y, u8 pattern, u8 flags)
