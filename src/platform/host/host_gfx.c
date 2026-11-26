@@ -318,7 +318,43 @@ void atma_gfx_hline(u8 y, u8 color)
 
 void atma_gfx_blit(i16 x, i16 y, u8 w, u8 h, const u8 *pixels)
 {
-    return;
+    u16 row;
+    i32 dst_y;
+    i32 src_x;
+    i32 dst_x;
+    i32 count;
+    i32 col;
+
+    if (!l2_tex || !pixels || !w || !h) return;
+
+    for (row = 0; row < h; ++row) {
+        dst_y = (i32)y + (i32)row;
+        if (dst_y < 0 || dst_y >= ATMA_SCREEN_H) continue;
+
+        dst_x = (i32)x;
+        src_x = 0;
+
+        if (dst_x < 0) {
+            src_x = -dst_x;
+            dst_x = 0;
+        }
+
+        if (dst_x >= ATMA_SCREEN_W || src_x >= w) continue;
+
+        count = (i32)w - src_x;
+        if (count > ATMA_SCREEN_W - dst_x)
+            count = ATMA_SCREEN_W - dst_x;
+        if (count <= 0) continue;
+
+        for (col = 0; col < count; ++col) {
+            u8 color = pixels[row * w + src_x + col];
+            if (color != 0) {
+                l2_vram[(u16)dst_y * ATMA_SCREEN_W + dst_x + col] = color;
+            }
+        }
+    }
+
+    l2_dirty = 1;
 }
 
 void atma_gfx_sprite_set(u8 slot, i16 x, i16 y, u8 pattern, u8 flags)
