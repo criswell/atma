@@ -35,10 +35,28 @@ static u8 glyph_buf[ATMA_FONT_W_MAX * ATMA_FONT_H_MAX];
  * whole reason text goes through it (see the blit rationale in gfx.h).
  * Bounds come from the font struct, so a 6x8 and an 8x16 font render
  * correctly through this one implementation.
+ *
+ * A NULL font, an out-of-range cell, or a count with no glyph array
+ * fails loudly: one atma_log and nothing is drawn. Silent clamping
+ * would corrupt a smaller-than-max font's rendering or crash on the
+ * deref; the fail-loudly rule trades that for a diagnosable no-op.
  */
 void atma_gfx_text(const atma_font *font, i16 x, i16 y, const char *s, u8 ink)
 {
     u8 c;
+    if (!font) {
+        atma_log("text: font is NULL");
+        return;
+    }
+    if (font->w < 1 || font->w > ATMA_FONT_W_MAX ||
+        font->h < 1 || font->h > ATMA_FONT_H_MAX) {
+        atma_log("text: font cell out of range (w 1..8, h 1..16)");
+        return;
+    }
+    if (font->count && !font->glyphs) {
+        atma_log("text: font has glyphs but no glyph array");
+        return;
+    }
     for (; *s; ++s) {
         c = (u8)*s;
         if (c < font->first || (u8)(c - font->first) >= font->count) {

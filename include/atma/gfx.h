@@ -260,6 +260,11 @@ void atma_gfx_blit(i16 x, i16 y, u8 w, u8 h, const u8 *pixels);
  *  coexist; each renders through its own w and h. Monospace by
  *  construction: every character advances the pen one cell width.
  *
+ *  A NULL font, an out-of-range cell, or a count with no glyph array
+ *  fails loudly: one atma_log and nothing is drawn. The 8-bit machine
+ *  has no stack unwinding to lean on; a corrupt font must not become
+ *  silent memory corruption.
+ *
  *  \param font Font to draw with (format and limits above).
  *  \param x, y Screen position of the first glyph's top-left pixel.
  *  \param s NUL-terminated string; draw stops at the NUL.
