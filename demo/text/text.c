@@ -5,12 +5,12 @@
 #include "atma/engine.h"
 #include "font8x8.h"
 
-#define START_R 100
-#define START_G 155
+#define START_R 0
+#define START_G 15
 #define START_B 255
 
-#define DELTA_PIX 3
-#define DELTA_COLOR 10
+#define DELTA_PIX 10
+#define DELTA_COLOR 30
 
 static void on_init(void)
 {
@@ -22,7 +22,7 @@ static void on_init(void)
         atma_gfx_palette_set(i,
             START_R + DELTA_COLOR * i,
             START_G + DELTA_COLOR * i,
-            START_B + DELTA_COLOR
+            START_B
         );
 
         atma_gfx_text(&font8x8, i + DELTA_PIX * i, i + DELTA_PIX * i,
