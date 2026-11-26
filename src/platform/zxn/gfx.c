@@ -165,7 +165,45 @@ void atma_gfx_pixel(i16 x, i16 y, u8 color)
 
 void atma_gfx_blit(i16 x, i16 y, u8 w, u8 h, const u8 *pixels)
 {
-    return;
+    u16 row;
+    const u8 *src;
+
+    if (!pixels || !w || !h) return;
+
+    src = pixels;
+    for (row = 0; row < h; ++row, src += w) {
+        i32 dst_y = (i32)y + (i32)row;
+        i32 src_x = 0;
+        i32 dst_x = (i32)x;
+        i32 count;
+        u16 dst_offset;
+        u16 col;
+        u8 *dst;
+
+        if (dst_y < 0 || dst_y >= ATMA_SCREEN_H) continue;
+
+        /* Clip the left edge, advancing the source start as needed. */
+        if (dst_x < 0) {
+            src_x = -dst_x;
+            dst_x = 0;
+        }
+
+        if (dst_x >= ATMA_SCREEN_W || src_x >= w) continue;
+
+        count = (i32)w - src_x;
+        if (count > ATMA_SCREEN_W - dst_x)
+            count = ATMA_SCREEN_W - dst_x;
+        if (count <= 0) continue;
+
+        dst_offset = (u16)((u32)dst_y * ATMA_SCREEN_W + (u32)dst_x);
+        l2_map(dst_offset);
+        dst = L2_WINDOW + (dst_offset & (L2_PAGE_BYTES - 1));
+
+        for (col = 0; col < (u16)count; ++col) {
+            u8 color = src[(u16)src_x + col];
+            if (color != 0) dst[col] = color;
+        }
+    }
 }
 
 void atma_gfx_hline(u8 y, u8 color)
