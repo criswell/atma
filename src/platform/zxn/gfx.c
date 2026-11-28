@@ -28,6 +28,13 @@
  * never restored. A scanline is 256 bytes and a page is 8192, so no hline
  * ever straddles a page boundary.
  *
+ * Slot 1 is shared infrastructure, not Layer 2 property: the tilemap's
+ * block RAM (bank 5 and bank 7's first half, reachable as MMU pages 10,
+ * 11 and 14) hangs off the same window, and the tilemap backend maps it
+ * through the same slot1_map() funnel, so the one-page cache always
+ * reflects whoever paged the window last. All slot 1 paging in the engine
+ * goes through slot1_map(); nothing else writes REG_MMU1.
+ *
  * Hardware sprites back atma_gfx_sprite_set: 64 slots, 16x16, 8bpp, with 16K
  * of pattern memory = 64 patterns of 256 bytes, exactly what
  * ATMA_MAX_PATTERNS_8BIT advertises. Patterns hold palette indices and the
@@ -62,21 +69,34 @@
 static u8 slot1_mapped_page = 0xFF; /* none yet */
 
 /**
- * \brief Map Layer 2 page \p page (bank*2 + half, 0..5) into the Layer 2
- * window, skipping the register write when the same absolute page already
- * sits there. The cache assumes atma owns slot 1 for the whole run: any
- * code that pages slot 1 must go through here, always with a value built
- * the way l2_map builds it (the register wants the absolute 8K RAM page,
- * L2_BANK_FIRST * 2 and up).
- * \param page Layer 2 page number: bank * 2 + half, relative to
- *        L2_BANK_FIRST.
+ * \brief Map absolute MMU page \p mmu_page into slot 1 (0x2000-0x3FFF),
+ * skipping the register write when that page already sits there.
+ *
+ * The cache assumes atma owns slot 1 for the whole run: any code that
+ * pages slot 1 must go through here. This is the only MMU slot 1 write
+ * in the engine.
+ *
+ * \param mmu_page Absolute 8K RAM page the register wants. Layer 2
+ *        lives at pages 16..21; tilemap block RAM (bank 5, bank 7 low
+ *        half) at 10, 11 and 14.
+ */
+static void slot1_map(u8 mmu_page)
+{
+    if (mmu_page == slot1_mapped_page) return;
+    slot1_mapped_page = mmu_page;
+    ZXN_WRITE_REG(REG_MMU1, mmu_page);
+}
+
+/**
+ * \brief Map Layer 2 page \p page (0..5: which 8K of the 48K Layer 2
+ * area) into the window. Dialect converter: Layer 2 pages are relative
+ * to L2_BANK_FIRST, the register wants absolute pages, so Layer 2 page
+ * N is MMU page (L2_BANK_FIRST * 2) + N.
+ * \param page Layer 2 page number: bank * 2 + half.
  */
 static void l2_map_page(u8 page)
 {
-    u8 mmu = (u8)((L2_BANK_FIRST << 1) + page);
-    if (mmu == slot1_mapped_page) return;
-    slot1_mapped_page = mmu;
-    ZXN_WRITE_REG(REG_MMU1, mmu);
+    slot1_map((u8)((L2_BANK_FIRST << 1) + page));
 }
 
 /**
@@ -87,6 +107,7 @@ static void l2_map(u16 offset)
 {
     l2_map_page((u8)(((offset >> 14) * 2) | ((offset >> 13) & 1)));
 }
+
 /**
  * \brief Write one 9-bit RGB333 palette entry.
  *
