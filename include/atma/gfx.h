@@ -84,6 +84,9 @@
  * - 7-0: tile number
  *
  * Compose static entries with these macros. Write 0 to bit 8.
+ * Transforms apply rotation first, then mirroring, matching the
+ * sprite attribute order (ATMA_SPR_ROTATE). The palette offset is
+ * masked to 4 bits; values beyond 15 lose their higher bits.
  * @{
  */
 #define ATMA_TILE_PALETTE_OFFSET(o) (((u16)(o) & 0x0F) << 12)
@@ -323,8 +326,6 @@ void atma_gfx_blit(i16 x, i16 y, u8 w, u8 h, const u8 *pixels);
  */
 void atma_gfx_text(const atma_font *font, i16 x, i16 y, const char *s, u8 ink);
 
-/** @} */
-
 /**
  * \brief Upload one 8x8, 4bpp tile definition.
  *
@@ -333,14 +334,18 @@ void atma_gfx_text(const atma_font *font, i16 x, i16 y, const char *s, u8 ink);
  * eight rows of four bytes, top to bottom. Within each byte, the high
  * nibble is the left pixel and the low nibble is the right pixel.
  *
- * Pixel value 0 is transparent on every backend. on the ZX Next, the
- * engine writes NextReg 0x4C to use pixel index 0 as the transparent
- * index. Other nonzero nibbles are 4-bit palette indices: the tilemap
+ * Pixel value 0 is transparent on every backend. On the ZX Next, the
+ * engine writes NextReg 0x4C so pixel index 0 is the transparent
+ * index, checked before the entry's palette offset joins the lookup:
+ * dot 0 is transparent under every offset, and no other dot can reach
+ * it. Other nonzero nibbles are 4-bit palette indices; the tilemap
  * entry's palette-offset nibble supplies the high 4 bits.
  *
  * atma_gfx_init() zeroes the engine-owned tile definitions and map.
- * Therefore, an uploaded zero-filled tile at id 0 is initially the
- * blank/clear tile.
+ * Un-uploaded tiles are therefore blank: a cell referencing an
+ * un-uploaded tile draws nothing, not garbage. Tile 0 begins
+ * all-transparent, so the zeroed map shows nothing; upload your
+ * blank there or leave it.
  *
  * \param tile Tile id, 0..255.
  * \param pixels ATMA_TILE_BYTES bytes, row-major, or NULL to fail.
@@ -353,24 +358,23 @@ int atma_gfx_tile_set(u8 tile, const u8 *pixels);
  * \brief Write one tilemap cell.
  *
  * Coordinates are tilemap-local screen-cell coordinates. (0,0) is the
- * top-left visible cell at zero scroll. The engine-owned 40x32 map also
- * includes a 4-cell ring around the visible 32x24 screen, with ring
- * coordinates from -4 through 35 and -4 through 27.
+ * top-left visible cell. The engine-owned 40x32 map also includes a
+ * 4-cell ring around the visible 32x24 screen, with ring coordinates
+ * from -4 through 35 and -4 through 27.
  *
- * Entries are stored and interpreted as:
- * (palette offset << 12) | mirror flags | tile number.
- * Entry 0 is tile 0 with no attributes and is written normally; there
- * is no skip-on-zero behavior.
+ * The entry uses the encoding documented at the ATMA_TILE_* macros:
+ * one u16, tile number in the low byte, attributes above. Entry 0 is
+ * tile 0 with no attributes and is written normally; there is no
+ * skip-on-zero behavior.
  *
- * The write is clipped silently to the 40x32 backing map; wholly
- * out-of-map calls do nothing.
+ * The write is clipped silently to the 40x32 backing map; a wholly
+ * out-of-map cell does nothing.
  *
  * \param col Destination map column, screen-cell coordinates.
  * \param row Destination map row, screen-cell coordinates.
- * \param tile Tile number, 0..255.
- * \param attr Palette offset and transform flags.
+ * \param entry Tilemap entry: tile number with ATMA_TILE_* attributes.
  */
-void atma_gfx_tilemap_cell(u8 col, u8 row, u8 tile, u8 attr);
+void atma_gfx_tilemap_cell(i16 col, i16 row, u16 entry);
 
 /**
  * \brief Write a rectangular group of tilemap cells.
@@ -395,11 +399,18 @@ void atma_gfx_tilemap_cell(u8 col, u8 row, u8 tile, u8 attr);
  */
 void atma_gfx_tilemap_cells(i16 col, i16 row, u8 w, u8 h,
                             const u16 *entries);
+
 /**
  * \brief Enable or disable the tilemap layer.
+ *
+ * The tilemap starts enabled at init, showing the fully transparent
+ * zeroed map; this call exists for debugging and for games that want
+ * the tilemap's fetch bandwidth back.
  *
  * \param on Nonzero enables the tilemap; zero disables it.
  */
 void atma_gfx_tilemap_enable(u8 on);
+
+/** @} */
 
 #endif
