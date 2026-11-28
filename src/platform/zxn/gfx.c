@@ -59,7 +59,7 @@
 /** MMU slot 1: 0x2000-0x3FFF, one 8K Layer 2 page at a time. */
 #define L2_WINDOW ((u8 *)0x2000)
 
-static u8 l2_mapped_page = 0xFF; /* none yet */
+static u8 slot1_mapped_page = 0xFF; /* none yet */
 
 /**
  * \brief Map Layer 2 page \p page (bank*2 + half, 0..5) into the Layer 2
@@ -74,8 +74,8 @@ static u8 l2_mapped_page = 0xFF; /* none yet */
 static void l2_map_page(u8 page)
 {
     u8 mmu = (u8)((L2_BANK_FIRST << 1) + page);
-    if (mmu == l2_mapped_page) return;
-    l2_mapped_page = mmu;
+    if (mmu == slot1_mapped_page) return;
+    slot1_mapped_page = mmu;
     ZXN_WRITE_REG(REG_MMU1, mmu);
 }
 
