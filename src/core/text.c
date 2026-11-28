@@ -13,14 +13,16 @@
 /**
  * \brief Text renderer backing atma_gfx_text() (API contract in gfx.h).
  *
- * One glyph at a time: unpack the glyph's packed rows from
- * font->glyphs into glyph_buf as {0, ink} indexed bytes using the
- * font's own cell (font->w x font->h, stride font->w), then one
- * atma_gfx_blit per character. Blit's skip-on-0 rule makes cleared
- * bits invisible, so the caller's background shows between ink pixels.
+ * One glyph at a time: the glyph's packed rows pass straight to
+ * atma_gfx_mask, which walks the 1-bit mask and writes \p ink where a
+ * bit is set. The font format IS the mask format (MSB-left packed rows,
+ * font8x8.h), so no unpack buffer exists any more: no expansion pass,
+ * no glyph_buf, and 8x less data touched per glyph than the old
+ * expand-then-blit path. Mask's skip-on-0-bit rule makes cleared bits
+ * invisible, so the caller's background shows between ink pixels.
  *
- * The per-character cost is one blit, never one pixel call: the blit
- * keeps the Layer 2 page mapping inside the backend, which is the
+ * The per-character cost is one mask call, never one pixel call: the
+ * mask keeps the Layer 2 page mapping inside the backend, which is the
  * whole reason text goes through it (see the blit rationale in gfx.h).
  * Bounds come from the font struct, so a 6x8 and an 8x16 font render
  * correctly through this one implementation.

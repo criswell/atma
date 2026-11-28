@@ -62,15 +62,30 @@
 static u8 l2_mapped_page = 0xFF; /* none yet */
 
 /**
+ * \brief Map Layer 2 page \p page (bank*2 + half, 0..5) into the Layer 2
+ * window, skipping the register write when the same absolute page already
+ * sits there. The cache assumes atma owns slot 1 for the whole run: any
+ * code that pages slot 1 must go through here, always with a value built
+ * the way l2_map builds it (the register wants the absolute 8K RAM page,
+ * L2_BANK_FIRST * 2 and up).
+ * \param page Layer 2 page number: bank * 2 + half, relative to
+ *        L2_BANK_FIRST.
+ */
+static void l2_map_page(u8 page)
+{
+    u8 mmu = (u8)((L2_BANK_FIRST << 1) + page);
+    if (mmu == l2_mapped_page) return;
+    l2_mapped_page = mmu;
+    ZXN_WRITE_REG(REG_MMU1, mmu);
+}
+
+/**
  * \brief Map the 8K page holding \p offset into the Layer 2 window.
  * \param offset Byte offset into the 48K Layer 2 area.
  */
 static void l2_map(u16 offset)
 {
-    u8 page = (u8)(((offset >> 14) * 2) | ((offset >> 13) & 1));
-    if (page == l2_mapped_page) return;
-    l2_mapped_page = page;
-    ZXN_WRITE_REG(REG_MMU1, page);
+    l2_map_page((u8)(((offset >> 14) * 2) | ((offset >> 13) & 1)));
 }
 /**
  * \brief Write one 9-bit RGB333 palette entry.
@@ -135,11 +150,12 @@ void atma_gfx_clear(u8 color)
 {
     u8 bank;
 
-    /* Three 16K banks, two 8K pages each: six window-sized fills. */
+    /* Three 16K banks, two 8K pages each: six window-sized fills. Routed
+     * through l2_map_page so the mapping cache stays honest. */
     for (bank = 0; bank < 3; ++bank) {
-        ZXN_WRITE_REG(REG_MMU1, (u8)(((L2_BANK_FIRST + bank) << 1) | 0));
+        l2_map_page((u8)(bank << 1));
         memset(L2_WINDOW, color, L2_PAGE_BYTES);
-        ZXN_WRITE_REG(REG_MMU1, (u8)(((L2_BANK_FIRST + bank) << 1) | 1));
+        l2_map_page((u8)((bank << 1) | 1));
         memset(L2_WINDOW, color, L2_PAGE_BYTES);
     }
 }
@@ -165,15 +181,15 @@ void atma_gfx_pixel(i16 x, i16 y, u8 color)
     L2_WINDOW[offset & (L2_PAGE_BYTES - 1)] = color;
 }
 
-static void l2_row_copy(const u8 *src, u8 *dst, u16 n);
-
 /* SDCC passes params on the stack: src at ix+4, dst at ix+6, n at ix+8.
- * Caller cleans the stack, same as l2_map. */
+ * Caller cleans the stack. The #asm block must live inside the function
+ * body (SDCC rejects file-scope asm), and SDCC's enter_ix prologue has
+ * already pushed ix and set ix = sp when the block runs, so the block
+ * uses that frame directly and falls through to SDCC's pop ix / ret. */
+static void l2_row_copy(const u8 *src, u8 *dst, u16 n)
+{
+    src; dst; n;
 #asm
-._l2_row_copy
-    push ix
-    ld ix,0
-    add ix,sp
     ld l,(ix+4)
     ld h,(ix+5)    ; hl = src
     ld e,(ix+6)
@@ -186,18 +202,52 @@ static void l2_row_copy(const u8 *src, u8 *dst, u16 n);
     xor a          ; skip-on-0: LDIRX does not write bytes equal to A
     ldirx
 .l2rc_done
-    pop ix
-    ret
 #endasm
+}
 
 void atma_gfx_blit(i16 x, i16 y, u8 w, u8 h, const u8 *pixels)
 {
+    u16 row;
     const u8 *src;
 
     if (!pixels || !w || !h) return;
 
     src = pixels;
-    l2_row_copy(src + (u16)src_x, dst, (u16)count);
+    for (row = 0; row < h; ++row, src += w) {
+        i32 dst_y = (i32)y + (i32)row;
+        i32 src_x = 0;
+        i32 dst_x = (i32)x;
+        i32 count;
+        u16 dst_offset;
+        u8 *dst;
+
+        if (dst_y < 0 || dst_y >= ATMA_SCREEN_H) continue;
+
+        /* Clip the left edge, advancing the source start as needed. */
+        if (dst_x < 0) {
+            src_x = -dst_x;
+            dst_x = 0;
+        }
+
+        if (dst_x >= ATMA_SCREEN_W || src_x >= w) continue;
+
+        count = (i32)w - src_x;
+        if (count > ATMA_SCREEN_W - dst_x)
+            count = ATMA_SCREEN_W - dst_x;
+        if (count <= 0) continue;
+
+        dst_offset = (u16)((u32)dst_y * ATMA_SCREEN_W + (u32)dst_x);
+        l2_map(dst_offset);
+        dst = L2_WINDOW + (dst_offset & (L2_PAGE_BYTES - 1));
+
+        /* The whole per-pixel loop, skip-on-0 included, is one LDIRX.
+         * src must not live in MMU slot 1 (0x2000-0x3FFF): the helper's
+         * DE writes through the same window its HL reads. Nothing links
+         * there (see the file comment), so that holds by construction.
+         * LDIRX is interruptible mid-copy; safe today because the engine
+         * ISR never writes slot 1. */
+        l2_row_copy(src + (u16)src_x, dst, (u16)count);
+    }
 }
 
 void atma_gfx_mask(i16 x, i16 y, u8 w, u8 h, const u8 *mask, u8 ink)
