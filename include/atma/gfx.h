@@ -231,6 +231,19 @@ void atma_gfx_sprite_hide(u8 slot);
  */
 void atma_gfx_pixel(i16 x, i16 y, u8 color);
 
+/** \brief Write a 1-bit mask rectangle in a single colour.
+ *
+ *  \param mask Row-major bits, MSB-left: bit 7 of the first byte is the
+ *         top-left pixel, each row packed to ceil(w/8) bytes. This is the
+ *         atma_font glyph format (font8x8.h:10-14), so font rows pass
+ *         directly. Padding bits in a row's last byte are ignored.
+ *  \param ink Palette index written where a bit is 1. Unlike blit, 0 is
+ *         allowed here: this is the only way to erase through a shape.
+ *  Bits that are 0 leave the background untouched. Clipped to the
+ *  screen, like blit.
+ */
+void atma_gfx_mask(i16 x, i16 y, u8 w, u8 h, const u8 *mask, u8 ink);
+
 /** \brief Write a rectangle of palette indices into the background.
  *
  *  \param pixels Row-major indices, w*h entries. Index 0 means "skip":

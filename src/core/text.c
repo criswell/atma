@@ -11,17 +11,6 @@
 #include "atma/engine.h"
 
 /**
- * \brief Scratch stencil for one glyph mid-unpack, reused per character.
- *
- * Sized to the format's largest possible cell (ATMA_FONT_W_MAX x
- * ATMA_FONT_H_MAX, 128 bytes). Holds {0, ink} indexed bytes between
- * unpacking a glyph's packed rows and the blit that draws them; nothing
- * survives the call, so concurrent fonts share it safely. Fonts
- * themselves live in game data via atma_font; this is never storage.
- */
-static u8 glyph_buf[ATMA_FONT_W_MAX * ATMA_FONT_H_MAX];
-
-/**
  * \brief Text renderer backing atma_gfx_text() (API contract in gfx.h).
  *
  * One glyph at a time: unpack the glyph's packed rows from
@@ -63,15 +52,8 @@ void atma_gfx_text(const atma_font *font, i16 x, i16 y, const char *s, u8 ink)
             x += font->w;
             continue;
         } else {
-            const u8 *g = font->glyphs + (u8)(c - font->first) * font->h;
-            u8 row, px;
-            for (row = 0; row < font->h; ++row) {
-                for (px = 0; px < font->w; ++px) {
-                    glyph_buf[row * font->w + px] =
-                        (g[row] & (0x80 >> px)) ? ink : 0;
-                }
-            }
-            atma_gfx_blit(x, y, font->w, font->h, glyph_buf);
+           atma_gfx_mask(x, y, font->w, font->h,
+              font->glyphs + (u8)(c - font->first) * font->h, ink);
         }
         x += font->w;
     }

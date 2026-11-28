@@ -357,6 +357,23 @@ void atma_gfx_blit(i16 x, i16 y, u8 w, u8 h, const u8 *pixels)
     l2_dirty = 1;
 }
 
+void atma_gfx_mask(i16 x, i16 y, u8 w, u8 h, const u8 *mask, u8 ink)
+{
+    u16 col;
+    i32 dst_y;
+    i32 dst_x;
+    i32 count;
+
+    if (!l2_tex || !mask || !w || !h) return;
+   
+    for (col = 0; col < count; ++col) {
+        i32 bit = src_bit + col;
+        if (mrow[(u16)bit >> 3] & (0x80 >> (bit & 7)))
+            l2_vram[(u16)dst_y * ATMA_SCREEN_W + dst_x + col] = ink;
+    }
+    l2_dirty = 1;
+}
+
 void atma_gfx_sprite_set(u8 slot, i16 x, i16 y, u8 pattern, u8 flags)
 {
     sprite_state *s;

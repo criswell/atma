@@ -59,17 +59,19 @@
 /** MMU slot 1: 0x2000-0x3FFF, one 8K Layer 2 page at a time. */
 #define L2_WINDOW ((u8 *)0x2000)
 
+static u8 l2_mapped_page = 0xFF; /* none yet */
+
 /**
  * \brief Map the 8K page holding \p offset into the Layer 2 window.
  * \param offset Byte offset into the 48K Layer 2 area.
  */
 static void l2_map(u16 offset)
 {
-    u8 bank = (u8)(offset >> 14);
-    u8 page = (u8)((offset >> 13) & 1);
-    ZXN_WRITE_REG(REG_MMU1, (u8)(((L2_BANK_FIRST + bank) << 1) | page));
+    u8 page = (u8)(((offset >> 14) * 2) | ((offset >> 13) & 1));
+    if (page == l2_mapped_page) return;
+    l2_mapped_page = page;
+    ZXN_WRITE_REG(REG_MMU1, page);
 }
-
 /**
  * \brief Write one 9-bit RGB333 palette entry.
  *
@@ -163,17 +165,54 @@ void atma_gfx_pixel(i16 x, i16 y, u8 color)
     L2_WINDOW[offset & (L2_PAGE_BYTES - 1)] = color;
 }
 
+static void l2_row_copy(const u8 *src, u8 *dst, u16 n);
+
+/* SDCC passes params on the stack: src at ix+4, dst at ix+6, n at ix+8.
+ * Caller cleans the stack, same as l2_map. */
+#asm
+._l2_row_copy
+    push ix
+    ld ix,0
+    add ix,sp
+    ld l,(ix+4)
+    ld h,(ix+5)    ; hl = src
+    ld e,(ix+6)
+    ld d,(ix+7)    ; de = dst
+    ld c,(ix+8)
+    ld b,(ix+9)    ; bc = n
+    ld a,b
+    or c
+    jr z,l2rc_done ; LDIRX with bc=0 would copy 64K
+    xor a          ; skip-on-0: LDIRX does not write bytes equal to A
+    ldirx
+.l2rc_done
+    pop ix
+    ret
+#endasm
+
 void atma_gfx_blit(i16 x, i16 y, u8 w, u8 h, const u8 *pixels)
 {
-    u16 row;
     const u8 *src;
 
     if (!pixels || !w || !h) return;
 
     src = pixels;
-    for (row = 0; row < h; ++row, src += w) {
+    l2_row_copy(src + (u16)src_x, dst, (u16)count);
+}
+
+void atma_gfx_mask(i16 x, i16 y, u8 w, u8 h, const u8 *mask, u8 ink)
+{
+    u16 row;
+    u16 stride;
+    const u8 *mrow;
+
+    if (!mask || !w || !h) return;
+
+    stride = (u16)((w + 7) >> 3);
+    mrow = mask;
+    for (row = 0; row < h; ++row, mrow += stride) {
         i32 dst_y = (i32)y + (i32)row;
-        i32 src_x = 0;
+        i32 src_bit = 0;
         i32 dst_x = (i32)x;
         i32 count;
         u16 dst_offset;
@@ -181,16 +220,10 @@ void atma_gfx_blit(i16 x, i16 y, u8 w, u8 h, const u8 *pixels)
         u8 *dst;
 
         if (dst_y < 0 || dst_y >= ATMA_SCREEN_H) continue;
+        if (dst_x < 0) { src_bit = -dst_x; dst_x = 0; }
+        if (dst_x >= ATMA_SCREEN_W || src_bit >= (i32)w) continue;
 
-        /* Clip the left edge, advancing the source start as needed. */
-        if (dst_x < 0) {
-            src_x = -dst_x;
-            dst_x = 0;
-        }
-
-        if (dst_x >= ATMA_SCREEN_W || src_x >= w) continue;
-
-        count = (i32)w - src_x;
+        count = (i32)w - src_bit;
         if (count > ATMA_SCREEN_W - dst_x)
             count = ATMA_SCREEN_W - dst_x;
         if (count <= 0) continue;
@@ -200,8 +233,8 @@ void atma_gfx_blit(i16 x, i16 y, u8 w, u8 h, const u8 *pixels)
         dst = L2_WINDOW + (dst_offset & (L2_PAGE_BYTES - 1));
 
         for (col = 0; col < (u16)count; ++col) {
-            u8 color = src[(u16)src_x + col];
-            if (color != 0) dst[col] = color;
+            u16 bit = (u16)src_bit + col;
+            if (mrow[bit >> 3] & (0x80 >> (bit & 7))) dst[col] = ink;
         }
     }
 }
