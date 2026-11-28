@@ -55,6 +55,44 @@
 #define ATMA_FONT_H_MAX 16
 /** @} */
 
+/** \brief Bytes in one 8x8, 4bpp tile. */
+#define ATMA_TILE_BYTES (8 * 4)
+
+/**
+ * \name Tilemap geometry
+ * \brief Fixed engine-owned tilemap dimensions.
+ * @{
+ */
+#define ATMA_TILEMAP_W 40
+#define ATMA_TILEMAP_H 32
+#define ATMA_TILEMAP_VISIBLE_W 32
+#define ATMA_TILEMAP_VISIBLE_H 24
+#define ATMA_TILEMAP_RING 4
+#define ATMA_MAX_TILES 256
+/** @} */
+
+/**
+ * \name Tilemap entry flags
+ * \brief Portability flags stored in the entry's high byte.
+ *
+ * Entry bits:
+ * - 15-12: palette offset
+ * - 11: mirror X
+ * - 10: mirror Y
+ * - 9: rotate 90 degrees clockwise
+ * - 8: reserved, must be zero
+ * - 7-0: tile number
+ *
+ * Compose static entries with these macros. Write 0 to bit 8.
+ * @{
+ */
+#define ATMA_TILE_PALETTE_OFFSET(o) (((u16)(o) & 0x0F) << 12)
+#define ATMA_TILE_MIRROR_X 0x0800
+#define ATMA_TILE_MIRROR_Y 0x0400
+#define ATMA_TILE_ROTATE   0x0200
+#define ATMA_TILE_BLANK    0x0000
+/** @} */
+
 /**
  * \brief Pixel font type definition
  *
@@ -286,5 +324,82 @@ void atma_gfx_blit(i16 x, i16 y, u8 w, u8 h, const u8 *pixels);
 void atma_gfx_text(const atma_font *font, i16 x, i16 y, const char *s, u8 ink);
 
 /** @} */
+
+/**
+ * \brief Upload one 8x8, 4bpp tile definition.
+ *
+ * Tile id 0 is the engine convention for the blank tile; it has no
+ * reserved special status. Exactly ATMA_TILE_BYTES bytes are read:
+ * eight rows of four bytes, top to bottom. Within each byte, the high
+ * nibble is the left pixel and the low nibble is the right pixel.
+ *
+ * Pixel value 0 is transparent on every backend. on the ZX Next, the
+ * engine writes NextReg 0x4C to use pixel index 0 as the transparent
+ * index. Other nonzero nibbles are 4-bit palette indices: the tilemap
+ * entry's palette-offset nibble supplies the high 4 bits.
+ *
+ * atma_gfx_init() zeroes the engine-owned tile definitions and map.
+ * Therefore, an uploaded zero-filled tile at id 0 is initially the
+ * blank/clear tile.
+ *
+ * \param tile Tile id, 0..255.
+ * \param pixels ATMA_TILE_BYTES bytes, row-major, or NULL to fail.
+ * \retval 0 Success.
+ * \retval -1 Failure; the backend logs one line.
+ */
+int atma_gfx_tile_set(u8 tile, const u8 *pixels);
+
+/**
+ * \brief Write one tilemap cell.
+ *
+ * Coordinates are tilemap-local screen-cell coordinates. (0,0) is the
+ * top-left visible cell at zero scroll. The engine-owned 40x32 map also
+ * includes a 4-cell ring around the visible 32x24 screen, with ring
+ * coordinates from -4 through 35 and -4 through 27.
+ *
+ * Entries are stored and interpreted as:
+ * (palette offset << 12) | mirror flags | tile number.
+ * Entry 0 is tile 0 with no attributes and is written normally; there
+ * is no skip-on-zero behavior.
+ *
+ * The write is clipped silently to the 40x32 backing map; wholly
+ * out-of-map calls do nothing.
+ *
+ * \param col Destination map column, screen-cell coordinates.
+ * \param row Destination map row, screen-cell coordinates.
+ * \param tile Tile number, 0..255.
+ * \param attr Palette offset and transform flags.
+ */
+void atma_gfx_tilemap_cell(u8 col, u8 row, u8 tile, u8 attr);
+
+/**
+ * \brief Write a rectangular group of tilemap cells.
+ *
+ * \p entries is row-major: entries[row * w + col], col changing fastest.
+ * Destination coordinates are screen-cell coordinates, i16 allows the
+ * ring and partially off-map rectangles to be used naturally.
+ *
+ * Clipping adjusts each row's start and visible width, but the source
+ * stride remains the original \p w. This is a sub-rectangle of the
+ * source, not a re-sliced rectangle. Writes clip to the 40x32 backing
+ * map, not to the 32x24 visible screen.
+ *
+ * Entry 0 is a real cell containing tile 0 and attribute 0; it always
+ * overwrites. A wholly out-of-map rectangle does nothing.
+ *
+ * \param col Destination left edge, in screen-cell coordinates.
+ * \param row Destination top edge, in screen-cell coordinates.
+ * \param w Source rectangle width in cells.
+ * \param h Source rectangle height in cells.
+ * \param entries Row-major tilemap entries, w*h values.
+ */
+void atma_gfx_tilemap_cells(i16 col, i16 row, u8 w, u8 h,
+                            const u16 *entries);
+/**
+ * \brief Enable or disable the tilemap layer.
+ *
+ * \param on Nonzero enables the tilemap; zero disables it.
+ */
+void atma_gfx_tilemap_enable(u8 on);
 
 #endif
